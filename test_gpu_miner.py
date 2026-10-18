@@ -9,6 +9,17 @@ from unittest.mock import patch
 from gpu_miner import GPUWorker,thermal_state
 
 class SafetyTests(unittest.TestCase):
+    def test_idle_deadline_crossing_never_sleeps_negative(self):
+        with tempfile.TemporaryDirectory() as directory:
+            worker=GPUWorker.__new__(GPUWorker);worker.process=None
+            worker.stop_file=Path(directory)/'STOP'
+            from unittest.mock import Mock
+            worker.pipe=Mock();worker.receive=Mock(return_value=('hashes',b'0'*32))
+            ticks=iter([0,.1,.11,.2,2,2])
+            with patch('gpu_miner.time.monotonic',side_effect=lambda:next(ticks,2)),patch('gpu_miner.time.sleep') as sleep:
+                self.assertEqual(len(worker.hashes(b'0'*76,0,1)),32)
+                for call in sleep.call_args_list:self.assertGreaterEqual(call.args[0],0)
+
     def test_hysteresis_and_hard_stops(self):
         def state(t,p=30,paused=False):return thermal_state({'temperature_c':t,'power_w':p},paused)
         self.assertEqual(state(63),'mine')

@@ -165,7 +165,9 @@ class GPUWorker:
         # At most 10% hashing duty cycle. Interruptible idle also gives the
         # OS graphics workload priority without changing global GPU settings.
         end=time.monotonic()+max(0.05,(time.monotonic()-began)*9)
-        while time.monotonic()<end and not self.stop_file.exists():time.sleep(min(.05,end-time.monotonic()))
+        while time.monotonic()<end and not self.stop_file.exists():
+            remaining=max(0,end-time.monotonic())
+            if remaining:time.sleep(min(.05,remaining))
         return raw
 
     def search(self,prefix,target,seconds=1):
