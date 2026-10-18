@@ -48,7 +48,7 @@ jobs:
           tar -C package -czf Pawquanta-Core-Linux-development.tar.gz linux
       - name: Full upstream unit suite with network delta
         if: ${{ !cancelled() && hashFiles('build/bin/test_bitcoin') != '' }}
-        run: build/bin/test_bitcoin --log_level=error --report_level=detailed > reports/core-unit-linux.txt 2>&1
+        run: ctest --test-dir build --output-on-failure -j2 --timeout 600 > reports/core-unit-linux.txt 2>&1
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -102,8 +102,7 @@ jobs:
           Compress-Archive -Path package/windows -DestinationPath Pawquanta-Core-Windows-development.zip
       - name: Full upstream unit suite with network delta
         if: ${{ !cancelled() && hashFiles('build/bin/Release/test_bitcoin.exe') != '' }}
-        shell: cmd
-        run: build\bin\Release\test_bitcoin.exe --log_level=error --report_level=detailed > reports\core-unit-windows.txt 2>&1
+        run: ctest --test-dir build --build-config Release --output-on-failure -j2 --timeout 600 *> reports/core-unit-windows.txt
       - uses: actions/upload-artifact@v4
         if: always()
         with:
