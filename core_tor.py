@@ -52,7 +52,7 @@ class TorClient:
         config.write_text(f'DataDirectory {quoted(state)}\nSocksPort 127.0.0.1:{self.port}\n'
             f'ControlPort 127.0.0.1:{self.control}\nCookieAuthentication 1\n'
             f'CookieAuthFile {quoted(self.directory / "control-cookie")}\n'
-            'ClientOnly 1\nExitRelay 0\nAvoidDiskWrites 1\nSafeLogging 1\nLog notice stdout\n')
+            'ClientOnly 1\nExitRelay 0\nAvoidDiskWrites 1\nSafeLogging 1\nLog notice stdout\n',encoding='utf-8')
         self.log=(self.directory/'transport.log').open('wb')
         self.process=subprocess.Popen([str(binary),'-f',str(config)],stdout=self.log,stderr=subprocess.STDOUT,
             creationflags=subprocess.CREATE_NO_WINDOW)
