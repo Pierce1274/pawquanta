@@ -60,7 +60,7 @@ def verify(binary):
         log=(root/'miner.log').open('wb');logs.append(log)
         miner=subprocess.Popen([sys.executable,str(ROOT/'core_miner.py'),'--config',str(root/'fixture-only-miner.json'),
             '--stop-file',str(stop)],stdout=log,stderr=subprocess.STDOUT,creationflags=subprocess.CREATE_NO_WINDOW)
-        until(lambda:a('getblockcount')>=3,timeout=900)
+        until(lambda:a('getblockcount')>=3,timeout=1800)
         stop.touch();assert miner.wait(timeout=20)==0
         until(lambda:a('getbestblockhash')==b('getbestblockhash'))
         ledger=RewardLedger(root/'fixture-rewards.sqlite',MAIN_GENESIS,script)

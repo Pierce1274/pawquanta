@@ -34,6 +34,8 @@ jobs:
         run: python -m unittest test_core_miner test_core_runtime test_core_wallet -v
       - name: Two-node and separate-miner acceptance
         run: python core-tools/verify-core-live.py --binary build/bin/bitcoind --report reports/core-live-linux.json
+      - name: Genesis-only restart before scheduled launch
+        run: python core-tools/verify-genesis-restart.py --binary build/bin/bitcoind --report reports/genesis-restart-linux.json
       - name: Package development binaries
         if: ${{ !cancelled() && hashFiles('build/bin/bitcoind') != '' }}
         run: |
@@ -95,6 +97,8 @@ jobs:
         run: python -m unittest test_core_miner test_core_runtime test_core_wallet -v
       - name: Two-node and separate-miner acceptance
         run: python core-tools/verify-core-live.py --binary build/bin/Release/bitcoind.exe --report reports/core-live-windows.json
+      - name: Genesis-only restart before scheduled launch
+        run: python core-tools/verify-genesis-restart.py --binary build/bin/Release/bitcoind.exe --report reports/genesis-restart-windows.json
       - name: Package development binaries
         if: ${{ !cancelled() && hashFiles('build/bin/Release/bitcoind.exe') != '' }}
         run: |

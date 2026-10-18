@@ -6,6 +6,7 @@
 
 #include <arith_uint256.h>
 #include <chain.h>
+#include <chainparams.h>
 #include <coins.h>
 #include <consensus/params.h>
 #include <kernel/caches.h>
@@ -238,7 +239,16 @@ ChainstateLoadResult VerifyLoadedChainstate(ChainstateManager& chainman, const C
     for (Chainstate* chainstate : chainman.GetAll()) {
         if (!is_coinsview_empty(chainstate)) {
             const CBlockIndex* tip = chainstate->m_chain.Tip();
-            if (tip && tip->nTime > GetTime() + MAX_FUTURE_BLOCK_TIME) {
+            // Initial creation already accepts the statically pinned genesis.
+            // Reopening that same genesis-only database must behave identically
+            // while Pawquanta's scheduled genesis timestamp is still ahead.
+            // Verify the actual header as well as its index key; no later block
+            // or modified header receives this startup-only exception.
+            const bool pinned_launch_genesis{tip && tip->nHeight == 0 &&
+                chainman.GetParams().GetChainType() == ChainType::MAIN &&
+                tip->GetBlockHash() == chainman.GetConsensus().hashGenesisBlock &&
+                tip->GetBlockHeader().GetHash() == chainman.GetConsensus().hashGenesisBlock};
+            if (tip && !pinned_launch_genesis && tip->nTime > GetTime() + MAX_FUTURE_BLOCK_TIME) {
                 return {ChainstateLoadStatus::FAILURE, _("The block database contains a block which appears to be from the future. "
                                                          "This may be due to your computer's date and time being set incorrectly. "
                                                          "Only rebuild the block database if you are sure that your computer's date and time are correct")};

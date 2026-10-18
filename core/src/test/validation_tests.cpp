@@ -8,9 +8,11 @@
 #include <core_io.h>
 #include <hash.h>
 #include <net.h>
+#include <node/chainstate.h>
 #include <signet.h>
 #include <uint256.h>
 #include <util/chaintype.h>
+#include <util/time.h>
 #include <validation.h>
 
 #include <string>
@@ -107,6 +109,43 @@ BOOST_AUTO_TEST_CASE(pawquanta_public_identity)
     BOOST_CHECK_EQUAL(network->GetConsensus().DifficultyAdjustmentInterval(), 120);
     BOOST_CHECK_EQUAL(network->GetConsensus().nSubsidyStartHeight, 1);
     BOOST_CHECK_EQUAL(GetBlockSubsidy(1, network->GetConsensus()), 40 * COIN);
+}
+
+BOOST_AUTO_TEST_CASE(pawquanta_future_genesis_reopen)
+{
+    LOCK(cs_main);
+    auto& chainman{*m_node.chainman};
+    auto& chain{chainman.ActiveChainstate().m_chain};
+    CBlockIndex* genesis{chain.Tip()};
+    BOOST_REQUIRE(genesis);
+    BOOST_REQUIRE_EQUAL(genesis->nHeight, 0);
+    SetMockTime(genesis->nTime - 6 * 60 * 60);
+    node::ChainstateLoadOptions options;
+    auto [status, error] = node::VerifyLoadedChainstate(chainman, options);
+    BOOST_CHECK(status == node::ChainstateLoadStatus::SUCCESS);
+
+    // A changed header cannot impersonate the pinned genesis index key.
+    CBlockHeader modified{genesis->GetBlockHeader()};
+    ++modified.nTime;
+    CBlockIndex impostor{modified};
+    const uint256 genesis_hash{genesis->GetBlockHash()};
+    impostor.phashBlock = &genesis_hash;
+    chain.SetTip(impostor);
+    std::tie(status, error) = node::VerifyLoadedChainstate(chainman, options);
+    BOOST_CHECK(status == node::ChainstateLoadStatus::FAILURE);
+    chain.SetTip(*genesis);
+
+    // A future descendant still fails the original startup time check.
+    modified.hashPrevBlock = genesis_hash;
+    const uint256 child_hash{modified.GetHash()};
+    CBlockIndex child{modified};
+    child.phashBlock = &child_hash;
+    child.pprev = genesis;
+    child.nHeight = 1;
+    chain.SetTip(child);
+    std::tie(status, error) = node::VerifyLoadedChainstate(chainman, options);
+    BOOST_CHECK(status == node::ChainstateLoadStatus::FAILURE);
+    chain.SetTip(*genesis);
 }
 
 BOOST_AUTO_TEST_CASE(signet_parse_tests)
