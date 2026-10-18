@@ -19,6 +19,7 @@ class WalletApp:
     def __init__(self,window,manifest):
         self.window,self.manifest=window,manifest
         self.events=queue.Queue();self.runtime=self.tor=None;self.address=None;self.worker=None
+        self.connection_worker=None
         self.closing=False
         self.profile=BASE/'Pawquanta-wallet-data';self.stop_file=self.profile/'STOP-MINING'
         window.title('Pawquanta — Wallet & Miner');window.geometry('700x470');window.minsize(620,430)
@@ -66,7 +67,8 @@ class WalletApp:
                     if self.runtime:self.runtime.stop()
                     if self.tor:self.tor.stop()
                     self.events.put(('connect_error',str(error)))
-        threading.Thread(target=work,daemon=True).start()
+        self.connection_worker=threading.Thread(target=work,daemon=True)
+        self.connection_worker.start()
 
     def start_mining(self):
         if not self.runtime or not self.address:return
@@ -144,6 +146,10 @@ class WalletApp:
         self.closing=True
         self.stop_mining();self.status.set('Safely closing your wallet and network connection…')
         def work():
+            if self.connection_worker:
+                self.connection_worker.join(timeout=365)
+                if self.connection_worker.is_alive():
+                    self.events.put(('error','Connection setup is still closing. Please wait before closing again.'));return
             if self.worker:self.worker.join(timeout=35)
             if self.runtime and not self.runtime.stop():self.events.put(('error','Node is still shutting down. Please wait before closing again.'));return
             if self.tor and not self.tor.stop():self.events.put(('error','Network connection is still shutting down. Please wait.'));return

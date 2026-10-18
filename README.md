@@ -1,58 +1,31 @@
-# Pawquanta / PQUA — Research Edition
+# Pawquanta / PQUA
 
-Working standalone blockchain software for local experiments. **Not a launched public mainnet. Test coins have no monetary value.**
+Independent, experimental public blockchain software. The release page states deployment status; a countdown or repository alone does not certify a launched network.
 
-## Easiest way: Windows desktop app
+## Easiest way to mine on Windows
 
-1. Open **Releases** on this repository and download `Pawquanta-Research-Windows-x64.zip`.
-2. Extract the entire ZIP into a folder you can write to.
-3. Open `Pawquanta-Research.exe`. No separate Python installation or package commands are needed.
-4. Click **Create wallet**, choose and remember a password, then click **Mine 4 blocks**.
-5. Click **Open explorer** to see your chain. **Stop** stops mining between blocks.
+1. Open [the mainnet release](https://github.com/Pierce1274/pawquanta/releases/tag/mainnet-v0.2.0) and download **Pawquanta-Wallet-Windows-x64.zip** when available.
+2. Extract the entire ZIP into a folder you can write to. Open **Pawquanta-Wallet.exe**.
+3. Click **Connect**. The verified network connection downloads automatically. No Python installation or terminal commands are needed.
+4. Use **Receive / copy address**, **Send coins**, **Start mining**, or **Stop mining**. The official application's mining start is October 18, 2026 at 08:00 PDT (15:00 UTC).
+5. Use **Show backup folder** and privately copy your encrypted backup and recovery password to separate storage. Never upload or share your wallet folder.
 
-Your wallet and chain live in `Pawquanta-data` beside the app. Back up `wallet.pem` and retain its password separately. There is no password reset. Newly mined rewards need three more blocks before spending. Each mining click runs a bounded four-block batch. This app opens only a loopback listener, not an internet port.
+Windows packages are unsigned. Match downloads against the release's SHA256SUMS.txt. Mining uses one CPU worker and does not guarantee income. Rewards mature after 100 blocks.
 
-**Each copy starts its own local practice network. Separate downloads do not automatically join one shared public chain or share balances.** There is no official public seed, mainnet launch, exchange, sale, or established PQUA price in this release. The graphical app intentionally does not ask you to handle node admission keys.
+## The network
 
-The Windows build is unsigned. Checksums and the source are provided for inspection. Do not disable antivirus or other security protections to run it. Windows x64 is the only packaged platform currently verified; phone, macOS and Linux packaged miners have not been provided.
+The maximum supply is below 42 million PQUA after integer rounding. It is issued over time; it is not allocated at launch. Genesis has no allocation. Rewards start at block 1 with 40 PQUA and halve every 525,000 rewarded blocks. The nominal block target is 60 seconds, with a 120-block difficulty interval.
 
-## Source, verification and developers
+Each miner runs an independent validating node and wallet. The initial public seed uses an onion service, so the Windows app establishes its own Tor connection automatically. The initial seed remains a single point of availability until additional node operators join. This software does not inherit Bitcoin's hash power, operators, economic value or security. SHA256d ASICs can overwhelm a small CPU-mined chain. No independent security audit or established market value is claimed.
 
-Python 3.11+ is required when running from source:
+The founder's client has a voluntary stop limit of 1,260,000 PQUA in canonical mining rewards, including immature rewards and fees. That limit does not restrict anyone else's mining or guarantee decentralized hash power. Published source and genesis do not guarantee anyone first-miner status.
 
-```text
-python -m venv .venv
-```
+## Source and verification
 
-On Windows:
+- `core/`: Bitcoin Core v30.2-derived native node, wallet, validation and adversarial tests; upstream MIT notices are preserved.
+- `core_wallet.py`, `core_runtime.py`, `core_tor.py`: desktop interface, encrypted local wallet, verified transport download.
+- `core_miner.py`: one-worker miner with durable reward accounting and a personal stop limit.
+- `core-tools/`: real-node regression acceptance and an explicitly private launch-parameter simulation.
+- GitHub Actions contains native builds and tests. Release notes identify the exact native and desktop source commits used by the published packages.
 
-```text
-.venv\Scripts\python -m pip install -r requirements-lock.txt
-.venv\Scripts\python -m unittest -v test_pawquanta
-.venv\Scripts\python easy_miner.py
-```
-
-On Linux/macOS, use `.venv/bin/python` instead. A working Tk installation is required for the source GUI; server and tests do not need Tk. These source paths are for developers; the packaged Windows app bundles its runtime.
-
-The source contains an account-based PoW blockchain, Ed25519 signed payments, encrypted wallets, fees, maturity, work-based fork selection, reorg handling, private peer sync, deterministic vectors and property/adversarial tests. The original CHONK-HASH and mascot were supplied with the research kit.
-
-## Limits and security
-
-- Short-lived research protocol: 1,999 mined blocks / 8 MiB chain limit; full-chain sync and replay.
-- Experimental 16-KiB, 32-round CHONK-HASH. No ASIC-resistance, GPU-resistance, novelty or security proof.
-- Node transport uses Python's development HTTP server. It is not hardened for public internet exposure.
-- Private peer endpoints use a shared admission secret. Public participation requires a different networking release.
-- No independent audit, production wallet recovery, peer discovery, long-term storage engine or open-network stress validation.
-- Supply uses integer atomic units, no genesis allocation, 40 initial PQUA and 525,000-block halvings. The theoretical lifetime subsidy is 41,999,999.93175 PQUA, below the 42-million ceiling. This network cannot reach its later eras because of its research lifetime limit.
-
-Do not forward these node ports to the internet or use the code for real funds. A VM does not turn this prototype into production consensus. Bitcoin-level security, adoption and profitability are not claimed.
-
-## Build the Windows app yourself
-
-Install PyInstaller in the development environment, then from the repository root:
-
-```text
-python -m PyInstaller --noconfirm --onedir --windowed --name Pawquanta-Research --paths Pawquanta-research --add-data "Pawquanta-research/assets/mascot.jpg;Pawquanta-research/assets" --add-data "countdown.html;." easy_miner.py
-```
-
-Run `dist/Pawquanta-Research/Pawquanta-Research.exe --self-test` to exercise encrypted wallets, mining, a signed payment and persistence. It writes `self-test-result.json` beside the executable. Keep every file under `_internal` alongside the EXE when distributing. The release ZIP includes third-party license notices.
+The old Python research edition and its practice balances are separate. See [RESEARCH-README.md](RESEARCH-README.md). Do not use `pawquanta.py` or the research-v0.1.0 practice miner to join this public chain; practice coins do not transfer.
