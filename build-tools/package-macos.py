@@ -37,7 +37,9 @@ for binary in [*library.iterdir(),*node.iterdir(),package/'Pawquanta-Metal']:
 # signed node, then seal the enclosing application with that manifest included.
 manifest['windows_node_sha256']=hashlib.sha256((node/'pawquanta-node').read_bytes()).hexdigest()
 (package/'core-release.json').write_text(json.dumps(manifest,indent=2)+'\n')
-subprocess.run(['codesign','--force','--deep','--sign','-',str(root/'dist/Pawquanta-Wallet.app')],check=True)
+subprocess.run(['codesign','--force','--sign','-',str(root/'dist/Pawquanta-Wallet.app')],check=True)
+subprocess.run(['codesign','--verify','--deep','--strict',str(root/'dist/Pawquanta-Wallet.app')],check=True)
+assert hashlib.sha256((node/'pawquanta-node').read_bytes()).hexdigest()==manifest['windows_node_sha256']
 check=root/'mac-wallet-selftest'
 subprocess.run([str(package/'Pawquanta-Wallet'),'--self-test','--self-test-data',str(check)],check=True,timeout=300)
 assert json.loads((check/'self-test-result.json').read_text())['passed']
