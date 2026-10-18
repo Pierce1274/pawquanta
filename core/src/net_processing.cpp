@@ -5232,7 +5232,8 @@ void PeerManagerImpl::CheckForStaleTipAndEvictPeers()
         } else if (m_connman.GetTryNewOutboundPeer()) {
             m_connman.SetTryNewOutboundPeer(false);
         }
-        m_stale_tip_check_time = now + STALE_CHECK_INTERVAL;
+        m_stale_tip_check_time = now + std::min(std::chrono::seconds{STALE_CHECK_INTERVAL},
+            std::chrono::seconds{m_chainman.GetConsensus().nPowTargetSpacing});
     }
 
     if (!m_initial_sync_finished && CanDirectFetch()) {

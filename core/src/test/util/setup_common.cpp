@@ -191,6 +191,11 @@ BasicTestingSetup::BasicTestingSetup(const ChainType chainType, TestOpts opts)
     gArgs.ForceSetArg("-datadir", fs::PathToString(m_path_root));
 
     SelectParams(chainType);
+    // Mainnet's genesis is scheduled for launch. Test clocks must already be
+    // after it, without changing the machine clock or production validation.
+    if (chainType == ChainType::MAIN) {
+        SetMockTime(std::max(GetTime(), Params().GenesisBlock().GetBlockTime() + 2 * 24 * 60 * 60));
+    }
     if (G_TEST_LOG_FUN) LogInstance().PushBackCallback(G_TEST_LOG_FUN);
     InitLogging(*m_node.args);
     AppInitParameterInteraction(*m_node.args);
