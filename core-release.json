@@ -1,0 +1,17 @@
+{
+  "schema": 1,
+  "ready": true,
+  "network": "pawquanta-main-v1",
+  "genesis": "00000037ccad3f09210835664fce3f8d4ff283e308d8a6cece13e1b4d4d63580",
+  "launch_utc_epoch": 1792335600,
+  "seed_nodes": [
+    "qjw6gt3xdsrn6khgzhbatgylpskvdqjsyvx4u7p4zyebua54mm5e5cad.onion:18731"
+  ],
+  "windows_node_file": "node/Pawquanta-node.exe",
+  "windows_node_sha256": "c690a0d04418bd109f2e153f6f20567ab4b83714b60f662b87777249e2b34ac0",
+  "source_commit": "54581c96b0e58775efdf2198ef2a61a44344691d",
+  "build_run": 39142917619,
+  "desktop_source_commit": "54581c96b0e58775efdf2198ef2a61a44344691d",
+  "package_sha256": "3f221a5b4b12eccf51dc15f20c11d47cdb090ba813bc87d51b740d2554e5d20e",
+  "release_url": "https://github.com/Pierce1274/pawquanta/releases/tag/mainnet-v0.2.0"
+}

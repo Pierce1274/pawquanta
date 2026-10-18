@@ -21,8 +21,8 @@ class WalletApp:
         self.events=queue.Queue();self.runtime=self.tor=None;self.address=None;self.worker=None
         self.connection_worker=None
         self.closing=False
-        self.profile=BASE/'Pawquanta-wallet-data';self.stop_file=self.profile/'STOP-MINING'
-        window.title('Pawquanta — Wallet & Miner');window.geometry('700x470');window.minsize(620,430)
+        self.profile=(Path.home()/'Library/Application Support/Pawquanta' if sys.platform=='darwin' else BASE/'Pawquanta-wallet-data');self.stop_file=self.profile/'STOP-MINING'
+        window.title('Pawquanta — Wallet & Miner');window.geometry('740x530');window.minsize(700,500)
         style=ttk.Style();style.theme_use('clam')
         style.configure('TFrame',background='#111820');style.configure('TLabel',background='#111820',foreground='#edf1f4',font=('Segoe UI',11))
         style.configure('Title.TLabel',font=('Segoe UI',26,'bold'));style.configure('Balance.TLabel',font=('Segoe UI',20,'bold'))
@@ -40,11 +40,13 @@ class WalletApp:
         self.connect_button=ttk.Button(buttons,text='Connect',command=self.connect);self.connect_button.pack(side='left',padx=(0,7))
         self.mine_button=ttk.Button(buttons,text='Start mining',command=self.start_mining,state='disabled');self.mine_button.pack(side='left',padx=7)
         ttk.Button(buttons,text='Stop mining',command=self.stop_mining).pack(side='left',padx=7)
+        self.gpu=tk.BooleanVar(value=False)
+        ttk.Checkbutton(frame,text='Use NVIDIA / Apple Metal GPU (guarded, low load)',variable=self.gpu).pack(anchor='w')
         actions=ttk.Frame(frame);actions.pack(fill='x')
         ttk.Button(actions,text='Receive / copy address',command=self.receive).pack(side='left',padx=(0,7))
         ttk.Button(actions,text='Send coins',command=self.send).pack(side='left',padx=7)
         ttk.Button(actions,text='Show backup folder',command=self.backup_folder).pack(side='left',padx=7)
-        ttk.Label(frame,text='Mining is voluntary and uses one CPU worker. Newly mined coins mature after 100 blocks.\nCoins have no established value. Mining does not guarantee income.',wraplength=630).pack(anchor='w',pady=(16,0))
+        ttk.Label(frame,text='Choose CPU or guarded NVIDIA / Apple Metal GPU mining. GPU pauses when hot.\nNew coins mature after 100 blocks. Coins have no established value or guaranteed income.',wraplength=670).pack(anchor='w',pady=(16,0))
         window.protocol('WM_DELETE_WINDOW',self.close);window.after(200,self.poll)
 
     def progress(self,message):self.events.put(('status',message))
@@ -83,10 +85,10 @@ class WalletApp:
         config={'armed':True,'network':'pawquanta-main-v1','genesis':MAIN_GENESIS,
             'rpc_url':self.runtime.wallet.url,'cookie_file':str(self.runtime.wallet.cookie),
             'receiving_address':self.address,'ledger_file':str(self.profile/'mining-rewards.sqlite'),
-            'limit_atomic_units':int(units),'not_before_utc_epoch':LAUNCH_EPOCH}
+            'limit_atomic_units':int(units),'not_before_utc_epoch':LAUNCH_EPOCH,'gpu':self.gpu.get()}
         def work():
             try:
-                self.progress('Mining scheduled for launch' if time.time()<LAUNCH_EPOCH else 'Mining with one CPU worker…')
+                self.progress('Mining scheduled for launch' if time.time()<LAUNCH_EPOCH else ('Mining with guarded NVIDIA GPU…' if config['gpu'] else 'Mining with one CPU worker…'))
                 mine(config,self.stop_file,owner_limit_enforced=False)
                 self.progress('Mining stopped. Your wallet stays connected.')
             except Exception as error:self.events.put(('error',str(error)))
@@ -125,7 +127,10 @@ class WalletApp:
     def backup_folder(self):
         if not self.profile.exists():return
         import os
-        os.startfile(str(self.profile))
+        if sys.platform=='darwin':
+            import subprocess
+            subprocess.Popen(['open',str(self.profile)])
+        else:os.startfile(str(self.profile))
         messagebox.showinfo('Wallet backup','Keep the encrypted backup and recovery-password file somewhere safe.\nNever upload or share either file. Your wallet data is private to this computer.')
 
     def poll(self):
@@ -194,10 +199,23 @@ def self_test(directory,manifest):
 
 
 if __name__=='__main__':
+    import multiprocessing
+    multiprocessing.freeze_support()
     parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--ui-smoke',action='store_true')
+    parser.add_argument('--gpu-self-test',type=Path)
     parser.add_argument('--self-test',action='store_true');parser.add_argument('--self-test-data',type=Path);arguments=parser.parse_args()
     manifest_file=BASE/'core-release.json'
     manifest=json.loads(manifest_file.read_text()) if manifest_file.exists() else {'ready':False}
+    if arguments.gpu_self_test:
+        from gpu_miner import GPUWorker
+        import tempfile
+        with tempfile.TemporaryDirectory() as directory:
+            gpu=GPUWorker(Path(directory)/'STOP')
+            try:
+                nonce=gpu.search(bytes(range(76)),2**256-1)
+                arguments.gpu_self_test.write_text(json.dumps({'passed':nonce is not None,'device':gpu.device,'sample':gpu.last_sample}))
+            finally:gpu.close()
+        raise SystemExit()
     if arguments.self_test:
         if not arguments.self_test_data:parser.error('--self-test-data is required')
         self_test(arguments.self_test_data,manifest);raise SystemExit()

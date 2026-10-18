@@ -7,10 +7,13 @@ import socket
 import subprocess
 import tarfile
 import time
+import sys
 from core_runtime import free_port,private_directory
 
 TOR_URL='https://dist.torproject.org/torbrowser/15.0.25/tor-expert-bundle-windows-x86_64-15.0.25.tar.gz'
 TOR_SHA256='c1988c701de2f24f7d098d1d6d7f507b58f27740d097f29c246e0524d639b252'
+MAC_TOR_URL='https://dist.torproject.org/torbrowser/15.0.25/tor-expert-bundle-macos-aarch64-15.0.25.tar.gz'
+MAC_TOR_SHA256='a3febb6179152b0b4f56a0f5cc57bf5cc8ecef7db35e7c3e9d5a044c8158c26c'
 
 class TorClient:
     def __init__(self,directory,status=lambda message:None):
@@ -19,18 +22,20 @@ class TorClient:
         self.process=self.log=None
 
     def start(self):
-        if os.name!='nt':raise ValueError('Desktop transport package currently supports Windows x64')
+        if os.name!='nt' and sys.platform!='darwin':raise ValueError('Desktop transport supports Windows x64 and Apple Silicon macOS')
+        mac=sys.platform=='darwin'
+        url,digest=(MAC_TOR_URL,MAC_TOR_SHA256) if mac else (TOR_URL,TOR_SHA256)
         private_directory(self.directory)
-        tools=self.directory/'tools';binary=tools/'tor/tor.exe'
+        tools=self.directory/'tools';binary=tools/('tor/tor' if mac else 'tor/tor.exe')
         if not binary.exists():
             self.status('Downloading the verified network connection (about 23 MB)…')
             archive=self.directory/'tor-official.tar.gz'
             temporary=archive.with_suffix('.download')
-            subprocess.run(['curl.exe','--fail','--location','--silent','--show-error','--retry','2',
-                '--max-time','180','--max-filesize','67108864','--output',str(temporary),TOR_URL],check=True,
-                creationflags=subprocess.CREATE_NO_WINDOW)
+            subprocess.run(['curl' if mac else 'curl.exe','--fail','--location','--silent','--show-error','--retry','2',
+                '--max-time','180','--max-filesize','67108864','--output',str(temporary),url],check=True,
+                creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
             with temporary.open('rb') as stream:
-                if hashlib.file_digest(stream,'sha256').hexdigest()!=TOR_SHA256:
+                if hashlib.file_digest(stream,'sha256').hexdigest()!=digest:
                     raise ValueError('Network download failed verification; it was not executed')
             temporary.replace(archive)
             tools.mkdir(exist_ok=True)
@@ -45,6 +50,7 @@ class TorClient:
                         output.parent.mkdir(parents=True,exist_ok=True)
                         with source.extractfile(member) as incoming,output.open('wb') as outgoing:
                             shutil.copyfileobj(incoming,outgoing)
+                        if mac:output.chmod(member.mode & 0o755)
                     else:raise ValueError('Unsupported network archive entry')
         state=self.directory/'state';state.mkdir(exist_ok=True)
         def quoted(path):return '"'+str(path).replace('\\','/')+'"'
@@ -55,7 +61,7 @@ class TorClient:
             'ClientOnly 1\nExitRelay 0\nAvoidDiskWrites 1\nSafeLogging 1\nLog notice stdout\n',encoding='utf-8')
         self.log=(self.directory/'transport.log').open('wb')
         self.process=subprocess.Popen([str(binary),'-f',str(config)],stdout=self.log,stderr=subprocess.STDOUT,
-            creationflags=subprocess.CREATE_NO_WINDOW)
+            creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
         deadline=time.monotonic()+240
         while time.monotonic()<deadline:
             if self.process.poll() is not None:raise RuntimeError('Network connection stopped; see the private transport.log')

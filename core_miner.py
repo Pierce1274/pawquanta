@@ -220,10 +220,17 @@ def mining_limit(value, owner_limit_enforced=True):
 
 def mine(config, stop_file, development=False, owner_limit_enforced=True):
     with exclusive_miner(config['ledger_file']):
-        _mine(config, stop_file, development, owner_limit_enforced)
+        gpu = None
+        try:
+            if config.get('gpu') is True:
+                from gpu_miner import GPUWorker
+                gpu = GPUWorker(stop_file)
+            _mine(config, stop_file, development, owner_limit_enforced, gpu)
+        finally:
+            if gpu: gpu.close()
 
 
-def _mine(config, stop_file, development=False, owner_limit_enforced=True):
+def _mine(config, stop_file, development=False, owner_limit_enforced=True, gpu=None):
     if config.get('armed') is not True:
         raise ValueError('Miner is not armed')
     limit=mining_limit(config['limit_atomic_units'],owner_limit_enforced)
@@ -239,7 +246,7 @@ def _mine(config, stop_file, development=False, owner_limit_enforced=True):
         raise ValueError('Receiving wallet does not own this payout address')
     script = payout['scriptPubKey']
     ledger = RewardLedger(config['ledger_file'], config['genesis'], script)
-    print('Miner configured: one CPU worker; cap includes immature rewards and fees.', flush=True)
+    print('Miner configured: '+('guarded GPU' if gpu else 'one CPU worker')+'; cap includes immature rewards and fees.', flush=True)
     while not stop_file.exists():
         if time.time() < config['not_before_utc_epoch']:
             time.sleep(min(1, config['not_before_utc_epoch'] - time.time()))
@@ -256,6 +263,15 @@ def _mine(config, stop_file, development=False, owner_limit_enforced=True):
         target = target_from_bits(template['bits'])
         if target != int(template['target'], 16):
             raise ValueError('Template target and bits disagree')
+        if gpu:
+            nonce=gpu.search(header,target)
+            if nonce is not None and not stop_file.exists():
+                raw_header=header+struct.pack('<I',nonce)
+                current_tip,current_earned=ledger.sync(rpc)
+                if current_tip==tip and current_earned+reward<=limit:
+                    result=rpc('submitblock',(raw_header+body).hex())
+                    print('GPU block accepted' if result is None else f'GPU block rejected: {result}',flush=True)
+            continue
         deadline = time.monotonic() + 1
         for nonce in range(2**32):
             raw_header = header + struct.pack('<I', nonce)

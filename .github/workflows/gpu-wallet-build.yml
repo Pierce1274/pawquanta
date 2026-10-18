@@ -1,0 +1,31 @@
+name: GPU wallet packages
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  macos:
+    runs-on: macos-14
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Dependencies
+        run: |
+          brew install cmake ninja boost libevent sqlite
+          python -m pip install pyinstaller
+      - name: Build the unchanged native consensus backend
+        run: |
+          cmake -S core -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DENABLE_IPC=OFF -DBUILD_GUI=OFF -DBUILD_TESTS=OFF -DBUILD_BENCH=OFF -DBUILD_FUZZ_BINARY=OFF -DENABLE_WALLET=ON
+          cmake --build build -j3
+      - name: Accounting and safety tests
+        run: python -m unittest test_gpu_miner test_core_miner test_core_runtime test_core_wallet -v
+      - name: Compile Metal and package Apple Silicon GUI
+        run: python build-tools/package-macos.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wallet-macos-apple-silicon
+          path: Pawquanta-Wallet-macOS-Apple-Silicon.zip
+          if-no-files-found: error
