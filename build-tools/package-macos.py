@@ -11,7 +11,9 @@ package=root/'dist/Pawquanta-Wallet.app/Contents/MacOS'
 node=package/'node';node.mkdir()
 shutil.copy2(root/'build/bin/bitcoind',node/'pawquanta-node')
 shutil.copy2(root/'build/bin/bitcoin-cli',node/'pawquanta-cli')
-subprocess.run([sys.executable,str(root/'build-tools/build-metal.py'),str(package/'Pawquanta-Metal')],check=True)
+metal=root/'metal-build/Pawquanta-Metal'
+subprocess.run([sys.executable,str(root/'build-tools/build-metal.py'),str(metal)],check=True)
+shutil.copy2(metal,package/'Pawquanta-Metal')
 manifest=json.loads((root/'core-release.json').read_text())
 manifest.update(windows_node_file='node/pawquanta-node',windows_node_sha256=hashlib.sha256((node/'pawquanta-node').read_bytes()).hexdigest(),desktop_source_commit=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip())
 (package/'core-release.json').write_text(json.dumps(manifest,indent=2)+'\n')
@@ -46,3 +48,8 @@ assert json.loads((check/'self-test-result.json').read_text())['passed']
 shutil.copy2(root/'core/COPYING',root/'dist/CORE-LICENSE.txt')
 (root/'dist/START-HERE.txt').write_text('Pawquanta Mainnet — experimental Apple Silicon preview\nOpen Pawquanta-Wallet.app, Connect, then optionally select Apple Metal GPU and Start mining.\nNot notarized. GPU must pass the on-device SHA256d self-check before mining.\nApple GPU hardware has not been verified on this build host. No M5 Max performance claim.\nWallet data: ~/Library/Application Support/Pawquanta. Keep backups and password private.\nStop mining stops hashing; no clock/fan/voltage changes.\n')
 subprocess.run(['ditto','-c','-k','--sequesterRsrc','--keepParent',str(root/'dist/Pawquanta-Wallet.app'),str(root/'Pawquanta-Wallet-macOS-Apple-Silicon.zip')],check=True)
+import zipfile
+with zipfile.ZipFile(root/'Pawquanta-Wallet-macOS-Apple-Silicon.zip','a',zipfile.ZIP_DEFLATED) as archive:
+    archive.write(root/'dist/CORE-LICENSE.txt','CORE-LICENSE.txt')
+    archive.write(root/'dist/START-HERE.txt','START-HERE.txt')
+    archive.write(root/'GPU-MINING.md','GPU-MINING.md')
