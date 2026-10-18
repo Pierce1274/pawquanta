@@ -38,7 +38,7 @@ GPU work runs in small batches with at least nine times as much idle time as
 measured batch wall time (at most 10% compute duty cycle, not a promise about
 the GPU's global utilization). NVIDIA telemetry is sampled at least once per
 second during hashing. Pause at 68 C or 65% of the reported enforced power
-limit; resume after temperature falls to 62 C and power is below the pause
+limit; resume after temperature falls to 66 C and power is below the pause
 threshold. Stop at 75 C or 85% of that limit. If a mobile driver does not
 report a limit, conservative approximately 50 W pause / 65 W stop ceilings
 apply. Missing temperature or power telemetry stops mining.

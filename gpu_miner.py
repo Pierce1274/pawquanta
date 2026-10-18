@@ -65,7 +65,7 @@ def thermal_state(sample, paused=False):
     soft=sample.get('power_limit_w',50/.65)*.65
     if sample['temperature_c']>=75 or sample['power_w']>=hard:return 'stop'
     if sample['temperature_c']>=68 or sample['power_w']>=soft:return 'pause'
-    if paused and sample['temperature_c']>62:return 'pause'
+    if paused and sample['temperature_c']>66:return 'pause'
     return 'mine'
 
 def _worker(pipe):
@@ -149,7 +149,7 @@ class GPUWorker:
         try:
             value=telemetry();decision=thermal_state(value,self.paused)
             self.last_sample=value;self.paused=decision=='pause';self.checked=time.monotonic()
-            state={**value,'phase':decision,'updated_at':time.time(),'duty_cycle_max':0.10,'hard_stop_c':75,'pause_c':68,'resume_c':62}
+            state={**value,'phase':decision,'updated_at':time.time(),'duty_cycle_max':0.10,'hard_stop_c':75,'pause_c':68,'resume_c':66}
             self.state_file.parent.mkdir(parents=True,exist_ok=True)
             temporary=self.state_file.with_suffix('.tmp');temporary.write_text(json.dumps(state,indent=2));temporary.replace(self.state_file)
             if decision=='stop':raise RuntimeError('GPU safety threshold reached; manually restart after checking cooling')
@@ -173,7 +173,7 @@ class GPUWorker:
         while time.monotonic()<deadline and not self.stop_file.exists():
             self.sample()
             if self.paused:time.sleep(.2);continue
-            count=4096
+            count=32768
             raw=self.hashes(prefix,start,count)
             for offset in range(count):
                 if int.from_bytes(raw[offset*32:offset*32+32],'little')<=target:

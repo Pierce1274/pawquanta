@@ -41,4 +41,6 @@ do {
 '''.replace('METAL_SOURCE',json.dumps(source))
 destination=Path(sys.argv[1]);destination.parent.mkdir(parents=True,exist_ok=True)
 temporary=destination.with_suffix('.swift');temporary.write_text(swift,encoding='utf-8')
+shader=destination.with_suffix('.metal');shader.write_text(source,encoding='utf-8')
+subprocess.run(['xcrun','-sdk','macosx','metal','-c',str(shader),'-o',str(destination.with_suffix('.air'))],check=True)
 subprocess.run(['xcrun','swiftc','-O','-framework','Metal','-framework','Foundation',str(temporary),'-o',str(destination)],check=True)
