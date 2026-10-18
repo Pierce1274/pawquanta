@@ -45,20 +45,26 @@ def telemetry():
         if value.get('thermal_state') not in (0,1,2,3):raise RuntimeError('Invalid Apple thermal telemetry')
         return value
     executable=Path(os.environ.get('SystemRoot','C:/Windows'))/'System32/nvidia-smi.exe'
-    result=subprocess.run([str(executable),'--query-gpu=uuid,name,temperature.gpu,power.draw','--format=csv,noheader,nounits'],
+    result=subprocess.run([str(executable),'--query-gpu=uuid,name,temperature.gpu,power.draw,enforced.power.limit','--format=csv,noheader,nounits'],
         capture_output=True,text=True,timeout=3,check=True,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
     rows=[row.strip().split(',') for row in result.stdout.strip().splitlines()]
     if len(rows)!=1:raise RuntimeError('GPU mode requires exactly one monitored NVIDIA GPU')
-    uuid,name,temp,power=[v.strip() for v in rows[0]]
+    uuid,name,temp,power,limit=[v.strip() for v in rows[0]]
     temp,power=float(temp),float(power)
-    if not 0<=temp<=120 or not 0<=power<=1000:raise RuntimeError('Invalid GPU telemetry')
-    return {'uuid':uuid,'name':name,'temperature_c':temp,'power_w':power}
+    available=limit not in ('[N/A]','N/A','[Not Supported]')
+    # Some mobile drivers expose watts but no adjustable power limit. Use
+    # conservative 50W-pause / 65W-stop ceilings rather than change the driver.
+    limit=float(limit) if available else 65/.85
+    if not 0<=temp<=120 or not 0<=power<=1000 or not 20<=limit<=1000:raise RuntimeError('Invalid GPU telemetry')
+    return {'uuid':uuid,'name':name,'temperature_c':temp,'power_w':power,'power_limit_w':limit,'power_limit_reported':available}
 
 def thermal_state(sample, paused=False):
     if 'thermal_state' in sample:
         return 'stop' if sample['thermal_state']>=2 else 'pause' if sample['thermal_state']==1 else 'mine'
-    if sample['temperature_c']>=75 or sample['power_w']>=65:return 'stop'
-    if sample['temperature_c']>=68 or sample['power_w']>=50:return 'pause'
+    hard=sample.get('power_limit_w',65/.85)*.85
+    soft=sample.get('power_limit_w',50/.65)*.65
+    if sample['temperature_c']>=75 or sample['power_w']>=hard:return 'stop'
+    if sample['temperature_c']>=68 or sample['power_w']>=soft:return 'pause'
     if paused and sample['temperature_c']>62:return 'pause'
     return 'mine'
 
@@ -131,8 +137,11 @@ class GPUWorker:
         if not self.pipe.poll(timeout):
             self.latch.write_text('GPU worker timeout. Inspect cooling and driver before retrying.\n')
             self.close();raise RuntimeError('GPU worker timed out; stopped without restarting the driver')
-        kind,value=self.pipe.recv()
-        if kind=='error':raise RuntimeError(value)
+        try:kind,value=self.pipe.recv()
+        except (EOFError,OSError) as error:
+            self.latch.write_text('GPU worker exited unexpectedly.\n');self.close();raise RuntimeError('GPU worker disconnected') from error
+        if kind=='error':
+            self.latch.write_text(value+'\n');self.close();raise RuntimeError(value)
         return kind,value
 
     def sample(self,force=False):
@@ -146,6 +155,8 @@ class GPUWorker:
             if decision=='stop':raise RuntimeError('GPU safety threshold reached; manually restart after checking cooling')
         except BaseException as error:
             if hasattr(self,'latch'):self.latch.write_text(str(error)+'\n')
+            if hasattr(self,'state_file'):
+                self.state_file.write_text(json.dumps({'phase':'safety_stopped','updated_at':time.time(),'error':str(error),**(self.last_sample or {})}))
             self.close();raise
 
     def hashes(self,prefix,start,count):

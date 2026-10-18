@@ -18,6 +18,10 @@ class SafetyTests(unittest.TestCase):
         self.assertEqual(state(75),'stop')
         self.assertEqual(state(60,65),'stop')
         self.assertEqual(state(60,50),'pause')
+        self.assertEqual(thermal_state({'temperature_c':60,'power_w':100,'power_limit_w':575}),'mine')
+        self.assertEqual(thermal_state({'thermal_state':0}),'mine')
+        self.assertEqual(thermal_state({'thermal_state':1}),'pause')
+        self.assertEqual(thermal_state({'thermal_state':2}),'stop')
 
     def test_sensor_failure_closes_worker(self):
         worker=GPUWorker.__new__(GPUWorker);worker.process=None
