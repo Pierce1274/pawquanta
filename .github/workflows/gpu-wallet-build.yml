@@ -1,5 +1,7 @@
 name: GPU wallet packages
 on:
+  push:
+    branches: [mainnet-gpu]
   workflow_dispatch:
 permissions:
   contents: read
