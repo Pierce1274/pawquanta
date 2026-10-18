@@ -210,16 +210,23 @@ def exclusive_miner(ledger_file):
                 fcntl.flock(handle, fcntl.LOCK_UN)
 
 
-def mine(config, stop_file, development=False):
+def mining_limit(value, owner_limit_enforced=True):
+    if type(value) is not int or not 0<=value<=42_000_000*UNIT:
+        raise ValueError('Mining limit must be an atomic-unit integer within the total supply')
+    if owner_limit_enforced and value!=APPROVED_LIMIT:
+        raise ValueError('Mining cap differs from the approved 1,260,000 PQUA')
+    return value
+
+
+def mine(config, stop_file, development=False, owner_limit_enforced=True):
     with exclusive_miner(config['ledger_file']):
-        _mine(config, stop_file, development)
+        _mine(config, stop_file, development, owner_limit_enforced)
 
 
-def _mine(config, stop_file, development=False):
+def _mine(config, stop_file, development=False, owner_limit_enforced=True):
     if config.get('armed') is not True:
         raise ValueError('Miner is not armed')
-    if config['limit_atomic_units'] != APPROVED_LIMIT:
-        raise ValueError('Mining cap differs from the approved 1,260,000 PQUA')
+    limit=mining_limit(config['limit_atomic_units'],owner_limit_enforced)
     rpc = RPC(config['rpc_url'], config['cookie_file'])
     info = rpc('getblockchaininfo')
     expected_chain = 'regtest' if development else 'main'
@@ -238,13 +245,13 @@ def _mine(config, stop_file, development=False):
             time.sleep(min(1, config['not_before_utc_epoch'] - time.time()))
             continue
         tip, earned = ledger.sync(rpc)
-        if earned >= APPROVED_LIMIT:
+        if earned >= limit:
             print('Mining cap reached. Stopped.', flush=True)
             return
         template = rpc('getblocktemplate', {'rules': ['segwit']})
         if template['previousblockhash'] != tip:
             continue
-        reward = min(template['coinbasevalue'], APPROVED_LIMIT - earned)
+        reward = min(template['coinbasevalue'], limit - earned)
         header, body = candidate(template, script, reward)
         target = target_from_bits(template['bits'])
         if target != int(template['target'], 16):
@@ -255,7 +262,7 @@ def _mine(config, stop_file, development=False):
             if int.from_bytes(sha256d(raw_header), 'little') <= target:
                 # Recheck the canonical quota immediately before submission.
                 current_tip, current_earned = ledger.sync(rpc)
-                if current_tip != tip or current_earned + reward > APPROVED_LIMIT:
+                if current_tip != tip or current_earned + reward > limit:
                     break
                 result = rpc('submitblock', (raw_header + body).hex())
                 print('Block accepted' if result is None else f'Block rejected: {result}', flush=True)

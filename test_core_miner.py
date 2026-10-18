@@ -30,6 +30,12 @@ class FakeChain:
 
 
 class MinerTests(unittest.TestCase):
+    def test_owner_cap_is_fixed_while_other_users_choose_their_own_budget(self):
+        self.assertEqual(m.mining_limit(m.APPROVED_LIMIT),m.APPROVED_LIMIT)
+        with self.assertRaises(ValueError):m.mining_limit(m.APPROVED_LIMIT+1)
+        self.assertEqual(m.mining_limit(42_000_000*m.UNIT,False),42_000_000*m.UNIT)
+        for invalid in (True,1.5,-1,42_000_000*m.UNIT+1):
+            with self.assertRaises(ValueError):m.mining_limit(invalid,False)
     def test_canonical_earnings_restart_reorg_and_network_switch(self):
         with tempfile.TemporaryDirectory() as directory:
             file = Path(directory) / 'earnings.sqlite'

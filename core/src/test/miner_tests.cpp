@@ -41,7 +41,10 @@ namespace miner_tests {
 struct MinerTestingSetup : public TestingSetup {
     // Exercise real block assembly on the private regression chain; Pawquanta's
     // public genesis and reward schedule have their own consensus-vector tests.
-    MinerTestingSetup() : TestingSetup{ChainType::REGTEST} {}
+    MinerTestingSetup() : TestingSetup{ChainType::REGTEST, {.extra_args = {
+        "-testactivationheight=csv@419328", "-testactivationheight=segwit@481824",
+        "-testactivationheight=cltv@388381", "-testactivationheight=dersig@363725",
+        "-testactivationheight=bip34@227931"}}} {}
     void TestPackageSelection(const CScript& scriptPubKey, const std::vector<CTransactionRef>& txFirst) EXCLUSIVE_LOCKS_REQUIRED(::cs_main);
     void TestBasicMining(const CScript& scriptPubKey, const std::vector<CTransactionRef>& txFirst, int baseheight) EXCLUSIVE_LOCKS_REQUIRED(::cs_main);
     void TestPrioritisedMining(const CScript& scriptPubKey, const std::vector<CTransactionRef>& txFirst) EXCLUSIVE_LOCKS_REQUIRED(::cs_main);
