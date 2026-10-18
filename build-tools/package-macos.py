@@ -5,6 +5,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
+import os
 root=Path(__file__).resolve().parents[1]
 subprocess.run([sys.executable,'-m','PyInstaller','--noconfirm','--onedir','--windowed','--name','Pawquanta-Wallet',str(root/'core_wallet.py')],check=True)
 package=root/'dist/Pawquanta-Wallet.app/Contents/MacOS'
@@ -15,7 +16,11 @@ metal=root/'metal-build/Pawquanta-Metal'
 subprocess.run([sys.executable,str(root/'build-tools/build-metal.py'),str(metal)],check=True)
 shutil.copy2(metal,package/'Pawquanta-Metal')
 manifest=json.loads((root/'core-release.json').read_text())
-manifest.update(windows_node_file='node/pawquanta-node',windows_node_sha256=hashlib.sha256((node/'pawquanta-node').read_bytes()).hexdigest(),desktop_source_commit=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip())
+commit=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
+manifest.pop('package_sha256',None)
+manifest.update(windows_node_file='node/pawquanta-node',windows_node_sha256=hashlib.sha256((node/'pawquanta-node').read_bytes()).hexdigest(),
+    source_commit=commit,desktop_source_commit=commit,build_run=os.environ.get('GITHUB_RUN_ID'),
+    platform='macos-apple-silicon',release_url='https://github.com/Pierce1274/pawquanta/releases/tag/mainnet-v0.3.1')
 (package/'core-release.json').write_text(json.dumps(manifest,indent=2)+'\n')
 # Bundle non-system Homebrew dependencies and rewrite Mach-O paths. Do this
 # before ad-hoc signing; no dependency on the build machine's /opt/homebrew.
