@@ -116,9 +116,13 @@ def verify(binary, report):
         a('invalidateblock', old_tip)
         reward_without_tip = ledger.sync(a)[1]
         assert reward_without_tip < after
-        wa('generatetoaddress', 2, address)
+        # A distinct payout makes a distinct branch even when fast CI stays in
+        # the same timestamp second; otherwise Core can regenerate the invalid tip.
+        competing_address = wa('getnewaddress', 'competing-branch')
+        wa('generatetoaddress', 2, competing_address)
         a('reconsiderblock', old_tip)
         until(lambda: b('getbestblockhash') == a('getbestblockhash'))
+        assert ledger.sync(a)[1] == reward_without_tip
         result = {'passed': True, 'scope': 'two_real_local_regression_nodes_and_separate_miner',
             'public_reachability_verified': False, 'mainnet_launched': False,
             'height': a('getblockcount'), 'tip': a('getbestblockhash'),

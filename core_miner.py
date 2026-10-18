@@ -102,7 +102,10 @@ class RPC:
         if parsed.scheme != 'http' or parsed.hostname not in ('127.0.0.1', '::1', 'localhost') or parsed.username:
             raise ValueError('Wallet RPC must use local loopback without URL credentials')
         self.url, self.cookie = url, Path(cookie)
-        self.opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+        class NoRedirect(urllib.request.HTTPRedirectHandler):
+            def redirect_request(self, request, file, code, message, headers, new_url):
+                return None
+        self.opener = urllib.request.build_opener(urllib.request.ProxyHandler({}),NoRedirect())
 
     def __call__(self, method, *params):
         credential = self.cookie.read_bytes().strip()

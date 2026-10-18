@@ -17,7 +17,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - uses: actions/cache@v4
+      - uses: actions/cache/restore@v4
         with:
           path: ~/.cache/ccache
           key: linux-core-v30.2-${{ github.sha }}
@@ -31,10 +31,11 @@ jobs:
       - name: Issuance and network identity tests
         run: build/bin/test_bitcoin --run_test=validation_tests --log_level=test_suite
       - name: Miner accounting tests
-        run: python -m unittest test_core_miner -v
+        run: python -m unittest test_core_miner test_core_runtime -v
       - name: Two-node and separate-miner acceptance
         run: python core-tools/verify-core-live.py --binary build/bin/bitcoind --report reports/core-live-linux.json
       - name: Package development binaries
+        if: ${{ !cancelled() && hashFiles('build/bin/bitcoind') != '' }}
         run: |
           mkdir -p package/linux/bin package/linux/lib
           cp build/bin/bitcoind package/linux/bin/pawquanta-node
@@ -46,6 +47,7 @@ jobs:
           sha256sum package/linux/bin/* > package/linux/SHA256SUMS
           tar -C package -czf Pawquanta-Core-Linux-development.tar.gz linux
       - name: Full upstream unit suite with network delta
+        if: ${{ !cancelled() && hashFiles('build/bin/test_bitcoin') != '' }}
         run: build/bin/test_bitcoin --log_level=error --report_level=detailed > reports/core-unit-linux.txt 2>&1
       - uses: actions/upload-artifact@v4
         if: always()
@@ -56,6 +58,11 @@ jobs:
             reports/*.json
             reports/*.txt
           if-no-files-found: warn
+      - uses: actions/cache/save@v4
+        if: ${{ !cancelled() }}
+        with:
+          path: ~/.cache/ccache
+          key: linux-core-v30.2-${{ github.sha }}
   windows:
     runs-on: windows-2022
     timeout-minutes: 120
@@ -69,7 +76,7 @@ jobs:
           python-version: '3.11'
       - name: Prepare dependency cache
         run: New-Item -ItemType Directory -Force $env:VCPKG_DEFAULT_BINARY_CACHE | Out-Null
-      - uses: actions/cache@v4
+      - uses: actions/cache/restore@v4
         with:
           path: vcpkg-binary-cache
           key: windows-core-vcpkg-${{ hashFiles('core/vcpkg.json') }}
@@ -81,10 +88,11 @@ jobs:
       - name: Issuance and network identity tests
         run: build/bin/Release/test_bitcoin.exe --run_test=validation_tests --log_level=test_suite
       - name: Miner accounting tests
-        run: python -m unittest test_core_miner -v
+        run: python -m unittest test_core_miner test_core_runtime -v
       - name: Two-node and separate-miner acceptance
         run: python core-tools/verify-core-live.py --binary build/bin/Release/bitcoind.exe --report reports/core-live-windows.json
       - name: Package development binaries
+        if: ${{ !cancelled() && hashFiles('build/bin/Release/bitcoind.exe') != '' }}
         run: |
           New-Item -ItemType Directory -Force package/windows | Out-Null
           Copy-Item build/bin/Release/bitcoind.exe package/windows/Pawquanta-node.exe
@@ -93,6 +101,7 @@ jobs:
           Get-FileHash package/windows/*.exe | ForEach-Object { "$($_.Hash.ToLower())  $([IO.Path]::GetFileName($_.Path))" } | Set-Content package/windows/SHA256SUMS
           Compress-Archive -Path package/windows -DestinationPath Pawquanta-Core-Windows-development.zip
       - name: Full upstream unit suite with network delta
+        if: ${{ !cancelled() && hashFiles('build/bin/Release/test_bitcoin.exe') != '' }}
         shell: cmd
         run: build\bin\Release\test_bitcoin.exe --log_level=error --report_level=detailed > reports\core-unit-windows.txt 2>&1
       - uses: actions/upload-artifact@v4
@@ -104,3 +113,8 @@ jobs:
             reports/*.json
             reports/*.txt
           if-no-files-found: warn
+      - uses: actions/cache/save@v4
+        if: ${{ !cancelled() }}
+        with:
+          path: vcpkg-binary-cache
+          key: windows-core-vcpkg-${{ hashFiles('core/vcpkg.json') }}
