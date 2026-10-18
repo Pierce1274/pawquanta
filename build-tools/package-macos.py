@@ -33,6 +33,10 @@ while pending:
     if binary.suffix=='.dylib':subprocess.run(['install_name_tool','-id','@rpath/'+binary.name,str(binary)],check=True)
 for binary in [*library.iterdir(),*node.iterdir(),package/'Pawquanta-Metal']:
     subprocess.run(['codesign','--force','--sign','-',str(binary)],check=True)
+# install_name_tool and codesign change the executable bytes. Pin the final
+# signed node, then seal the enclosing application with that manifest included.
+manifest['windows_node_sha256']=hashlib.sha256((node/'pawquanta-node').read_bytes()).hexdigest()
+(package/'core-release.json').write_text(json.dumps(manifest,indent=2)+'\n')
 subprocess.run(['codesign','--force','--deep','--sign','-',str(root/'dist/Pawquanta-Wallet.app')],check=True)
 check=root/'mac-wallet-selftest'
 subprocess.run([str(package/'Pawquanta-Wallet'),'--self-test','--self-test-data',str(check)],check=True,timeout=300)
