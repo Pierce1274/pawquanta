@@ -1,0 +1,6 @@
+attrs==26.1.0
+cffi==2.1.1
+cryptography==50.0.2
+hypothesis==6.135.26
+pycparser==3.11
+sortedcontainers==2.4.0

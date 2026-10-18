@@ -1,0 +1,109 @@
+{
+  "warning": "PUBLIC TEST VECTOR KEY: bytes(range(32)); never use for funds",
+  "genesis_hash": "95b5b0df423f34ba1a3251059a374e189c69fee98bc23a1e981623fdb9a03ce7",
+  "chain": [
+    {
+      "network": "pawquanta-private-v1",
+      "height": 0,
+      "previous": "0000000000000000000000000000000000000000000000000000000000000000",
+      "timestamp": 0,
+      "target": 7237005577332262213973186563042994240829374041602535252466099000494570602496,
+      "nonce": 0,
+      "miner": "GENESIS",
+      "transactions": []
+    },
+    {
+      "network": "pawquanta-private-v1",
+      "height": 1,
+      "previous": "95b5b0df423f34ba1a3251059a374e189c69fee98bc23a1e981623fdb9a03ce7",
+      "timestamp": 60,
+      "target": 7237005577332262213973186563042994240829374041602535252466099000494570602496,
+      "nonce": 23,
+      "miner": "pqua_56475aa75463474c0285df5dbf2bcab73da65135",
+      "transactions": []
+    },
+    {
+      "network": "pawquanta-private-v1",
+      "height": 2,
+      "previous": "522ee4e05ac14f305fd2981e77eb19da0286e0900c53aa11d19e3c23224b9014",
+      "timestamp": 120,
+      "target": 7237005577332262213973186563042994240829374041602535252466099000494570602496,
+      "nonce": 16,
+      "miner": "pqua_56475aa75463474c0285df5dbf2bcab73da65135",
+      "transactions": []
+    },
+    {
+      "network": "pawquanta-private-v1",
+      "height": 3,
+      "previous": "f2f150f892723f79c553d8632e7018d6aa4780c60f54300b4c240c7c5792f14f",
+      "timestamp": 180,
+      "target": 7237005577332262213973186563042994240829374041602535252466099000494570602496,
+      "nonce": 5,
+      "miner": "pqua_56475aa75463474c0285df5dbf2bcab73da65135",
+      "transactions": []
+    },
+    {
+      "network": "pawquanta-private-v1",
+      "height": 4,
+      "previous": "6e718a70a6bc472dc755e451055b0967fa3feed6d1de759cdd956489e69c8a8c",
+      "timestamp": 240,
+      "target": 7237005577332262213973186563042994240829374041602535252466099000494570602496,
+      "nonce": 17,
+      "miner": "pqua_56475aa75463474c0285df5dbf2bcab73da65135",
+      "transactions": []
+    },
+    {
+      "network": "pawquanta-private-v1",
+      "height": 5,
+      "previous": "18b02de7f7a9217bb6434c1f433cb854dc54b7da756926211146ab82f44aeff9",
+      "timestamp": 300,
+      "target": 7237005577332262213973186563042994240829374041602535252466099000494570602496,
+      "nonce": 16,
+      "miner": "pqua_56475aa75463474c0285df5dbf2bcab73da65135",
+      "transactions": [
+        {
+          "network": "pawquanta-private-v1",
+          "from": "pqua_56475aa75463474c0285df5dbf2bcab73da65135",
+          "to": "pqua_1111111111111111111111111111111111111111",
+          "amount": 1000000000,
+          "fee": 1000,
+          "nonce": 0,
+          "public_key": "A6EHv/POEL4dcN0Y50vAmWfk1jCbpQ1fHdyGZBJVMbg=",
+          "signature": "cAwIyzs8jKV2v6EeLlu1KE/2yOXO/10EFhQ29eO+BIOMHmRkLzgo8VqxiM594lJtl4g9A5FjEewCvVrH1o2fAA=="
+        }
+      ]
+    }
+  ],
+  "tip": "6997b68f447e888d220292d2e467f86ed219f75f12a2aee5393e05932ba77487",
+  "pow_hash": "0ba7dbde1eacd5a97963ec22664f50524e3194937e185a610bac62a714bea116",
+  "canonical_last_block": "{\"height\":5,\"miner\":\"pqua_56475aa75463474c0285df5dbf2bcab73da65135\",\"network\":\"pawquanta-private-v1\",\"nonce\":16,\"previous\":\"18b02de7f7a9217bb6434c1f433cb854dc54b7da756926211146ab82f44aeff9\",\"target\":7237005577332262213973186563042994240829374041602535252466099000494570602496,\"timestamp\":300,\"transactions\":[{\"amount\":1000000000,\"fee\":1000,\"from\":\"pqua_56475aa75463474c0285df5dbf2bcab73da65135\",\"network\":\"pawquanta-private-v1\",\"nonce\":0,\"public_key\":\"A6EHv/POEL4dcN0Y50vAmWfk1jCbpQ1fHdyGZBJVMbg=\",\"signature\":\"cAwIyzs8jKV2v6EeLlu1KE/2yOXO/10EFhQ29eO+BIOMHmRkLzgo8VqxiM594lJtl4g9A5FjEewCvVrH1o2fAA==\",\"to\":\"pqua_1111111111111111111111111111111111111111\"}]}",
+  "transaction_id": "bb414e76ab379d66913bbb0e61d8b5a51a21be2c8f2fb61e450d43504b8b83eb",
+  "emission_atomic_units": 4199999993175000,
+  "state": {
+    "balances": {
+      "pqua_56475aa75463474c0285df5dbf2bcab73da65135": 6999999000,
+      "pqua_1111111111111111111111111111111111111111": 1000000000
+    },
+    "nonces": {
+      "pqua_56475aa75463474c0285df5dbf2bcab73da65135": 1
+    },
+    "pending": [
+      [
+        6,
+        "pqua_56475aa75463474c0285df5dbf2bcab73da65135",
+        4000000000
+      ],
+      [
+        7,
+        "pqua_56475aa75463474c0285df5dbf2bcab73da65135",
+        4000000000
+      ],
+      [
+        8,
+        "pqua_56475aa75463474c0285df5dbf2bcab73da65135",
+        4000001000
+      ]
+    ],
+    "work": 75
+  }
+}

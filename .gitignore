@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+.hypothesis/
+runtime/
+Pawquanta-data/
+*.pem
+*.key
+*.log
+build/
+dist/
+*.spec

@@ -1,0 +1,32 @@
+services:
+  node1:
+    build: .
+    environment:
+      PQUA_TESTNET_KEY: ${PQUA_TESTNET_KEY:?Set a random private testnet key of 24+ characters}
+    command: ["--peer", "http://node2:18701", "--peer", "http://node3:18701"]
+    ports: ["127.0.0.1:18701:18701"]
+    volumes: ["node1:/data"]
+    mem_limit: 256m
+    cpus: 0.5
+  node2:
+    build: .
+    environment:
+      PQUA_TESTNET_KEY: ${PQUA_TESTNET_KEY:?Set a random private testnet key of 24+ characters}
+    command: ["--peer", "http://node1:18701", "--peer", "http://node3:18701"]
+    ports: ["127.0.0.1:18702:18701"]
+    volumes: ["node2:/data"]
+    mem_limit: 256m
+    cpus: 0.5
+  node3:
+    build: .
+    environment:
+      PQUA_TESTNET_KEY: ${PQUA_TESTNET_KEY:?Set a random private testnet key of 24+ characters}
+    command: ["--peer", "http://node1:18701", "--peer", "http://node2:18701"]
+    ports: ["127.0.0.1:18703:18701"]
+    volumes: ["node3:/data"]
+    mem_limit: 256m
+    cpus: 0.5
+volumes:
+  node1:
+  node2:
+  node3:

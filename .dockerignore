@@ -1,0 +1,8 @@
+.venv
+.pip-cache
+runtime
+.git
+reports
+__pycache__
+.hypothesis
+*.pem
