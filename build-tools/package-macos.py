@@ -9,6 +9,10 @@ import os
 root=Path(__file__).resolve().parents[1]
 subprocess.run([sys.executable,'-m','PyInstaller','--noconfirm','--onedir','--windowed','--name','Pawquanta-Wallet',str(root/'core_wallet.py')],check=True)
 package=root/'dist/Pawquanta-Wallet.app/Contents/MacOS'
+resources=package.parent/'Resources';resources.mkdir(exist_ok=True)
+# Match PyInstaller's normal cross-link layout: data lives in Resources,
+# while code in MacOS reaches it through a relative in-bundle symlink.
+(package/'core-release.json').symlink_to('../Resources/core-release.json')
 node=package/'node';node.mkdir()
 shutil.copy2(root/'build/bin/bitcoind',node/'pawquanta-node')
 shutil.copy2(root/'build/bin/bitcoin-cli',node/'pawquanta-cli')

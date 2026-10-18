@@ -21,10 +21,25 @@ jobs:
           python build-tools/pin-boost.py
       - name: Compile Metal helper and shader without requiring a GPU
         run: python build-tools/build-metal.py metal-preflight/Pawquanta-Metal
+      - uses: actions/cache/restore@v4
+        id: native-cache
+        with:
+          path: |
+            build/bin/bitcoind
+            build/bin/bitcoin-cli
+          key: macos-arm64-native-v1-${{ hashFiles('core/**') }}
       - name: Build the unchanged native consensus backend
+        if: steps.native-cache.outputs.cache-hit != 'true'
         run: |
           cmake -S core -B build -G Ninja -DBoost_DIR="$PWD/boost-pinned/cmake" -DCMAKE_BUILD_TYPE=Release -DENABLE_IPC=OFF -DBUILD_GUI=OFF -DBUILD_TESTS=OFF -DBUILD_BENCH=OFF -DBUILD_FUZZ_BINARY=OFF -DENABLE_WALLET=ON
           cmake --build build -j3
+      - uses: actions/cache/save@v4
+        if: steps.native-cache.outputs.cache-hit != 'true'
+        with:
+          path: |
+            build/bin/bitcoind
+            build/bin/bitcoin-cli
+          key: macos-arm64-native-v1-${{ hashFiles('core/**') }}
       - name: Accounting and safety tests
         run: python -m unittest test_gpu_miner test_core_miner test_core_runtime test_core_wallet -v
       - name: Compile Metal and package Apple Silicon GUI
