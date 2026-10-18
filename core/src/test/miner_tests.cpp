@@ -225,7 +225,9 @@ void MinerTestingSetup::TestPackageSelection(const CScript& scriptPubKey, const 
     AddToMempool(tx_mempool, entry.Fee(feeToUse + 2).FromTx(tx));
 
     // waitNext() should return if fees for the new template are at least 1 sat up
-    block_template = block_template->waitNext({.fee_threshold = 1});
+    // The replacement is already in the mempool. Check immediately rather than
+    // waiting on a frozen fixture clock if fee selection ever regresses.
+    block_template = block_template->waitNext({.timeout = MillisecondsDouble{0}, .fee_threshold = 1});
     BOOST_REQUIRE(block_template);
     block = block_template->getBlock();
     BOOST_REQUIRE_EQUAL(block.vtx.size(), 6U);
