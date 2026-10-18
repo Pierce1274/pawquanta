@@ -38,7 +38,9 @@ def until(check, timeout=45):
 
 def verify(binary, report):
     report.parent.mkdir(parents=True, exist_ok=True)
-    root = Path(tempfile.mkdtemp(prefix='pqua-live-', dir=report.parent))
+    private_runtime = report.parent.parent / 'runtime-core-checks'
+    private_runtime.mkdir(parents=True, exist_ok=True)
+    root = Path(tempfile.mkdtemp(prefix='pqua-live-', dir=private_runtime))
     nodes, logs = [], []
     miner = None
     try:
@@ -52,7 +54,7 @@ def verify(binary, report):
                 '-server=1', '-listen=1', '-bind=127.0.0.1', f'-port={peer_port}',
                 f'-rpcport={rpc_port}', '-rpcbind=127.0.0.1', '-dnsseed=0',
                 '-fixedseeds=0', '-discover=0', '-listenonion=0', '-connect=0',
-                '-dbcache=32', '-par=2', '-maxconnections=8', '-fallbackfee=0.00001'],
+                '-dbcache=32', '-par=2', '-maxconnections=16', '-maxmempool=32', '-fallbackfee=0.00001'],
                 stdout=log, stderr=subprocess.STDOUT)
             rpc = m.RPC(f'http://127.0.0.1:{rpc_port}', data / 'regtest/.cookie')
             nodes.append((process, rpc, data, peer_port))
@@ -97,7 +99,9 @@ def verify(binary, report):
         assert miner.wait(timeout=15) == 0
         until(lambda: b('getbestblockhash') == a('getbestblockhash'))
         # Mature outputs, send a signed payment, verify mempool relay and confirmation.
-        wa('generatetoaddress', 101, address)
+        # Bounded batches avoid a single long RPC monopolizing a slow laptop disk.
+        for _ in range(21):
+            wa('generatetoaddress', 5, address)
         until(lambda: b('getbestblockhash') == a('getbestblockhash'))
         ledger = m.RewardLedger(root / 'quota.sqlite', genesis, script)
         before = ledger.sync(a)[1]

@@ -40,9 +40,6 @@ const CBaseChainParams& BaseParams()
  */
 std::unique_ptr<CBaseChainParams> CreateBaseChainParams(const ChainType chain)
 {
-    if (chain != ChainType::MAIN && chain != ChainType::REGTEST) {
-        throw std::runtime_error("Pawquanta supports only its own main network and local regression tests; Bitcoin test networks are disabled");
-    }
     switch (chain) {
     case ChainType::MAIN:
         return std::make_unique<CBaseChainParams>("", 18732);

@@ -1358,6 +1358,11 @@ bool AppInitMain(NodeContext& node, interfaces::BlockAndHeaderTipInfo* tip_info)
 {
     const ArgsManager& args = *Assert(node.args);
     const CChainParams& chainparams = Params();
+    // Parameter metadata for upstream test vectors may still be constructed,
+    // but an actual daemon must never join Bitcoin's public test networks.
+    if (chainparams.GetChainType() != ChainType::MAIN && chainparams.GetChainType() != ChainType::REGTEST) {
+        return InitError(Untranslated("Pawquanta supports only its own main network and local regression tests; Bitcoin public test networks are disabled"));
+    }
 
     auto opt_max_upload = ParseByteUnits(args.GetArg("-maxuploadtarget", DEFAULT_MAX_UPLOAD_TARGET), ByteUnit::M);
     if (!opt_max_upload) {
