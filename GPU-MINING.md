@@ -34,9 +34,9 @@ The GPU worker is a separate, bounded process with no wallet password or RPC
 cookie. Every start compares actual GPU SHA256d hashes to CPU hashes; each
 winning header is checked again on CPU before submission.
 
-GPU work runs in small batches with at least nine times as much idle time as
-measured batch wall time (at most 10% compute duty cycle, not a promise about
-the GPU's global utilization). NVIDIA telemetry is sampled at least once per
+GPU work runs in bounded batches with idle time between batches. The default
+compute duty is 10%; an operator can configure 5-50% in gpu-performance.json.
+This is not a promise about the GPU's global utilization. NVIDIA telemetry is sampled at least once per
 second during hashing. Pause at 68 C or 65% of the reported enforced power
 limit; resume after temperature falls to 66 C and power is below the pause
 threshold. Stop at 75 C or 85% of that limit. If a mobile driver does not
@@ -47,9 +47,9 @@ Apple's supported system thermal state is used instead of invented temperature
 readings: nominal permits mining, fair pauses, serious or critical stops. Apple
 thermal status describes the system, not a precise GPU temperature or wattage.
 
-Sensor faults, worker failures and hard safety trips latch a GPU-SAFETY-STOP
-file beside the mining STOP file. Mining stays stopped until the user checks
-cooling and deliberately clears that file. A hung worker is terminated after
+Temperature and power trips pause work and resume after safe readings and a
+cooldown. Sensor faults and worker failures latch a GPU-SAFETY-STOP file beside
+the mining STOP file; these require inspection and deliberate clearance. A hung worker is terminated after
 the short job timeout; this does not reset the graphics driver. No mining
 software can guarantee protection from driver, firmware or hardware faults.
 

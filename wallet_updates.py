@@ -51,7 +51,7 @@ def extract_package(archive,destination,platform):
             if any(part.endswith((' ','.')) or part.split('.')[0].upper() in {'CON','PRN','AUX','NUL',*[f'COM{i}' for i in range(1,10)],*[f'LPT{i}' for i in range(1,10)]} for part in name.parts):raise ValueError('Unsafe platform filename')
             # Mac ZIP may contain separately supplied notices and Apple metadata.
             if name.parts[0]!=root:
-                if platform=='macos-arm64' and (name.parts[0]=='__MACOSX' or str(name) in ('CORE-LICENSE.txt','START-HERE.txt','GPU-MINING.md')):continue
+                if platform=='macos-arm64' and (name.parts[0]=='__MACOSX' or str(name) in ('CORE-LICENSE.txt','START-HERE.txt','GPU-MINING.md','UPDATES-AND-SECURITY.md')):continue
                 raise ValueError('Unexpected update package root')
             key=unicodedata.normalize('NFC',str(name)).casefold()
             if key in paths:raise ValueError('Duplicate archive path')
