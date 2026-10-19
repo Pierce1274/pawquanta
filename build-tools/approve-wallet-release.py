@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import secrets
 import sys
+import zipfile
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
@@ -61,13 +62,19 @@ def approve(version,serial,windows,mac,password):
     if type(serial) is not int or serial<42:raise ValueError('Invalid release serial')
     metadata=FEED/'metadata';old=Metadata.from_file(str(metadata/'targets.json')) if (metadata/'targets.json').exists() else None
     if old and serial<=old.signed.version:raise ValueError('Approval serial must increase')
+    approval_signer=signer('targets',password)
+    for file,base in ((windows,'Pawquanta-Wallet'),(mac,'Pawquanta-Wallet.app/Contents/Resources')):
+        with zipfile.ZipFile(file) as bundle:
+            manifest=json.loads(bundle.read(base+'/core-release.json'))
+            if manifest.get('wallet_version')!=version or manifest.get('genesis')!=MAIN_GENESIS:raise ValueError('Package version or network differs from approval')
+            if bundle.read(base+'/update-root.json')!=(ROOT/'update-root.json').read_bytes():raise ValueError('Package trust root differs from approval root')
     release={'version':version,'serial':serial,'genesis':MAIN_GENESIS,'protocol_change':False}
     packages={'windows-x64':f'mainnet-v{version}/{windows.name}','macos-arm64':f'mainnet-v{version}/{mac.name}'}
     channel=FEED/'targets/channel.json';channel.write_text(json.dumps({'release':release,'packages':packages},indent=2)+'\n')
     targets=Metadata(Targets(version=serial,expires=datetime.now(timezone.utc)+timedelta(days=365)))
     for name,file in [('channel.json',channel),(packages['windows-x64'],windows),(packages['macos-arm64'],mac)]:
         targets.signed.targets[name]=TargetFile.from_file(name,str(file),['sha256'])
-    targets.sign(signer('targets',password));targets.to_file(str(metadata/'targets.json'))
+    targets.sign(approval_signer);targets.to_file(str(metadata/'targets.json'))
     renew();print('Approved application release',version,'with serial',serial)
 
 if __name__=='__main__':

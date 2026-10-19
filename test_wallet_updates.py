@@ -33,9 +33,18 @@ class UpdatesTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             root=Path(folder);approval.ROOT=root;approval.PRIVATE=root/'private';approval.FEED=root/'feed';approval.initialize()
             binary=root/'Pawquanta-Wallet-Windows-x64.zip'
-            with zipfile.ZipFile(binary,'w') as bundle:bundle.writestr('Pawquanta-Wallet/Pawquanta-Wallet.exe',b'benign fixture; never executed')
+            from core_runtime import MAIN_GENESIS
+            manifest=json.dumps({'wallet_version':'0.4.3','genesis':MAIN_GENESIS})
+            with zipfile.ZipFile(binary,'w') as bundle:
+                bundle.writestr('Pawquanta-Wallet/Pawquanta-Wallet.exe',b'benign fixture; never executed')
+                bundle.writestr('Pawquanta-Wallet/core-release.json',manifest)
+                bundle.writestr('Pawquanta-Wallet/update-root.json',(root/'update-root.json').read_bytes())
+            mac=root/'Pawquanta-Wallet-macOS.zip'
+            with zipfile.ZipFile(mac,'w') as bundle:
+                bundle.writestr('Pawquanta-Wallet.app/Contents/Resources/core-release.json',manifest)
+                bundle.writestr('Pawquanta-Wallet.app/Contents/Resources/update-root.json',(root/'update-root.json').read_bytes())
             password=(approval.PRIVATE/'approval-password.txt').read_bytes().strip()
-            approval.approve('0.4.3',43,binary,binary,password)
+            approval.approve('0.4.3',43,binary,mac,password)
             package=approval.FEED/'packages/mainnet-v0.4.3';package.mkdir(parents=True)
             (package/binary.name).write_bytes(binary.read_bytes())
             import functools

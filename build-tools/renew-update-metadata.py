@@ -12,6 +12,7 @@ feed=Path(sys.argv[1]);metadata=feed/'metadata'
 root=Metadata.from_file(str(metadata/'root.json'))
 targets=Metadata.from_file(str(metadata/'targets.json'));root.verify_delegate('targets',targets)
 now=datetime.now(timezone.utc)
+if root.signed.expires<=now or targets.signed.expires<=now:raise RuntimeError('Approval metadata expired; operator approval is required')
 snapshot=Metadata.from_file(str(metadata/'snapshot.json'));timestamp=Metadata.from_file(str(metadata/'timestamp.json'))
 snapshot.signed.version+=1;snapshot.signed.expires=now+timedelta(days=365)
 snapshot.signed.meta={'targets.json':MetaFile.from_data(targets.signed.version,(metadata/'targets.json').read_bytes(),['sha256'])}

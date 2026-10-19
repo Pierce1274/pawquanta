@@ -25,6 +25,9 @@ filenames and oversized archives are rejected. Bootstrap trust comes from the
 root metadata bundled with the initial application. Protect that initial
 download and compare its published checksum.
 
+A valid signature identifies the approved publisher; it is not proof that new
+code is safe. Automatic updates require trust in the publisher's review.
+
 Only an approved release can change software. Scheduled maintenance can renew
 freshness metadata using limited online keys, but cannot sign a new targets
 list. Root and release-approval private keys are not shipped with the app or
