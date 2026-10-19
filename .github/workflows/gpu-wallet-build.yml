@@ -17,7 +17,7 @@ jobs:
       - name: Dependencies
         run: |
           brew install cmake ninja boost libevent sqlite
-          python -m pip install pyinstaller
+          python -m pip install pyinstaller tuf==7.0.1 cryptography==50.0.2
           python build-tools/pin-boost.py
       - name: Compile Metal helper and shader without requiring a GPU
         run: python build-tools/build-metal.py metal-preflight/Pawquanta-Metal
@@ -41,11 +41,29 @@ jobs:
             build/bin/bitcoin-cli
           key: macos-arm64-native-v1-${{ hashFiles('core/**') }}
       - name: Accounting and safety tests
-        run: python -m unittest test_gpu_miner test_core_miner test_core_runtime test_core_wallet -v
+        run: python -m unittest test_gpu_miner test_core_miner test_core_runtime test_core_wallet test_wallet_updates test_chain_guard -v
       - name: Compile Metal and package Apple Silicon GUI
         run: python build-tools/package-macos.py
       - uses: actions/upload-artifact@v4
         with:
           name: wallet-macos-apple-silicon
           path: Pawquanta-Wallet-macOS-Apple-Silicon.zip
+          if-no-files-found: error
+  windows-wallet:
+    runs-on: windows-2022
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install pyinstaller pyopencl==2026.1.4 tuf==7.0.1 cryptography==50.0.2
+      - name: Update, reorg, wallet and mining tests
+        run: python -m unittest test_wallet_updates test_chain_guard test_core_wallet test_core_miner test_core_runtime test_gpu_miner -v
+      - name: Package and verify the Windows wallet
+        run: python build-tools/package-windows.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wallet-windows-x64
+          path: Pawquanta-Wallet-Windows-x64.zip
           if-no-files-found: error

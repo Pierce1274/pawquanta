@@ -7,12 +7,14 @@ import subprocess
 import sys
 import os
 root=Path(__file__).resolve().parents[1]
-subprocess.run([sys.executable,'-m','PyInstaller','--noconfirm','--onedir','--windowed','--name','Pawquanta-Wallet',str(root/'core_wallet.py')],check=True)
+subprocess.run([sys.executable,'-m','PyInstaller','--noconfirm','--onedir','--windowed','--collect-all','tuf','--collect-all','securesystemslib','--name','Pawquanta-Wallet',str(root/'core_wallet.py')],check=True)
 package=root/'dist/Pawquanta-Wallet.app/Contents/MacOS'
 resources=package.parent/'Resources';resources.mkdir(exist_ok=True)
 # Match PyInstaller's normal cross-link layout: data lives in Resources,
 # while code in MacOS reaches it through a relative in-bundle symlink.
 (package/'core-release.json').symlink_to('../Resources/core-release.json')
+shutil.copy2(root/'update-root.json',resources/'update-root.json')
+(package/'update-root.json').symlink_to('../Resources/update-root.json')
 node=package/'node';node.mkdir()
 shutil.copy2(root/'build/bin/bitcoind',node/'pawquanta-node')
 shutil.copy2(root/'build/bin/bitcoin-cli',node/'pawquanta-cli')
@@ -24,7 +26,7 @@ commit=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
 manifest.pop('package_sha256',None)
 manifest.update(windows_node_file='node/pawquanta-node',windows_node_sha256=hashlib.sha256((node/'pawquanta-node').read_bytes()).hexdigest(),
     source_commit=commit,desktop_source_commit=commit,build_run=os.environ.get('GITHUB_RUN_ID'),
-    platform='macos-apple-silicon',release_url='https://github.com/Pierce1274/pawquanta/releases/tag/mainnet-v0.3.1')
+    platform='macos-apple-silicon',release_url='https://github.com/Pierce1274/pawquanta/releases/tag/mainnet-v0.4.2',wallet_version='0.4.2')
 (package/'core-release.json').write_text(json.dumps(manifest,indent=2)+'\n')
 # Bundle non-system Homebrew dependencies and rewrite Mach-O paths. Do this
 # before ad-hoc signing; no dependency on the build machine's /opt/homebrew.
@@ -53,7 +55,8 @@ subprocess.run(['codesign','--verify','--deep','--strict',str(root/'dist/Pawquan
 assert hashlib.sha256((node/'pawquanta-node').read_bytes()).hexdigest()==manifest['windows_node_sha256']
 check=root/'mac-wallet-selftest'
 subprocess.run([str(package/'Pawquanta-Wallet'),'--self-test','--self-test-data',str(check)],check=True,timeout=300)
-assert json.loads((check/'self-test-result.json').read_text())['passed']
+result=json.loads((check/'self-test-result.json').read_text())
+assert result['passed'] and result['real_reorg_alarm_persisted'] and result['minimum_12_confirmation_send']
 shutil.copy2(root/'core/COPYING',root/'dist/CORE-LICENSE.txt')
 (root/'dist/START-HERE.txt').write_text('Pawquanta Mainnet — experimental Apple Silicon preview\nOpen Pawquanta-Wallet.app, Connect, then optionally select Apple Metal GPU and Start mining.\nNot notarized. GPU must pass the on-device SHA256d self-check before mining.\nApple GPU hardware has not been verified on this build host. No M5 Max performance claim.\nWallet data: ~/Library/Application Support/Pawquanta. Keep backups and password private.\nStop mining stops hashing; no clock/fan/voltage changes.\n')
 subprocess.run(['ditto','-c','-k','--sequesterRsrc','--keepParent',str(root/'dist/Pawquanta-Wallet.app'),str(root/'Pawquanta-Wallet-macOS-Apple-Silicon.zip')],check=True)
@@ -62,3 +65,4 @@ with zipfile.ZipFile(root/'Pawquanta-Wallet-macOS-Apple-Silicon.zip','a',zipfile
     archive.write(root/'dist/CORE-LICENSE.txt','CORE-LICENSE.txt')
     archive.write(root/'dist/START-HERE.txt','START-HERE.txt')
     archive.write(root/'GPU-MINING.md','GPU-MINING.md')
+    archive.write(root/'UPDATES-AND-SECURITY.md','UPDATES-AND-SECURITY.md')

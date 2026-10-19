@@ -13,6 +13,29 @@ import time
 import hashlib
 import sys
 
+def write_status(path, state):
+    """Status is advisory; a Windows reader must not interrupt monitoring."""
+    try:
+        path.parent.mkdir(parents=True,exist_ok=True)
+        temporary=path.with_suffix('.tmp')
+        temporary.write_text(json.dumps(state,indent=2))
+        for attempt in range(5):
+            try:
+                temporary.replace(path)
+                return True
+            except PermissionError:
+                time.sleep(.02)
+    except OSError:
+        pass
+    return False
+
+def mining_duty(stop_file):
+    try:
+        value=json.loads(Path(stop_file).with_name('gpu-performance.json').read_text())['duty_cycle']
+        if type(value) not in (float,int) or not .05<=value<=.5:raise ValueError('Invalid GPU duty cycle')
+        return float(value)
+    except (OSError,ValueError,KeyError,TypeError):return .10
+
 def metal_executable():
     base=Path(sys.executable).resolve().parent if getattr(sys,'frozen',False) else Path(__file__).resolve().parent
     return base/'Pawquanta-Metal'
@@ -68,6 +91,12 @@ def thermal_state(sample, paused=False):
     if paused and sample['temperature_c']>66:return 'pause'
     return 'mine'
 
+SEARCH_KERNEL=SOURCE[SOURCE.index('__kernel void hash_headers'):].replace(
+    'hash_headers(__global const uchar *prefix,uint start,__global uchar *out)',
+    'search_headers(__global const uchar *prefix,uint start,__global const uint *target,__global uint *result)').replace(
+    'for(int i=0;i<8;i++){out[id*32+i*4]=s[i]>>24;out[id*32+i*4+1]=s[i]>>16;out[id*32+i*4+2]=s[i]>>8;out[id*32+i*4+3]=s[i];}',
+    'for(int i=7;i>=0;i--){uint h=((s[i]&255)<<24)|((s[i]&65280)<<8)|((s[i]>>8)&65280)|(s[i]>>24);if(h>target[i])return;if(h<target[i])break;} if(atomic_cmpxchg(result,0U,1U)==0U)result[1]=nonce;')
+
 def _worker(pipe):
     try:
         if sys.platform=='darwin':
@@ -77,13 +106,25 @@ def _worker(pipe):
         devices=[d for p in cl.get_platforms() for d in p.get_devices(device_type=cl.device_type.GPU) if 'NVIDIA' in d.vendor.upper()]
         if len(devices)!=1:raise RuntimeError('Exactly one NVIDIA OpenCL GPU required')
         context=cl.Context(devices);queue=cl.CommandQueue(context)
-        program=cl.Program(context,SOURCE).build();kernel=cl.Kernel(program,'hash_headers')
+        program=cl.Program(context,SOURCE+SEARCH_KERNEL).build();kernel=cl.Kernel(program,'hash_headers');finder=cl.Kernel(program,'search_headers')
         pipe.send(('ready',devices[0].name))
         while True:
             job=pipe.recv()
             if job is None:break
-            prefix,start,count=job
-            if len(prefix)!=76 or not 1<=count<=32768 or not 0<=start<=2**32-count:raise ValueError('Unbounded GPU job')
+            prefix,start,count=job[:3]
+            searching=len(job)==4
+            if len(prefix)!=76 or not 1<=count<=(262144 if searching else 32768) or not 0<=start<=2**32-count:raise ValueError('Unbounded GPU job')
+            if searching:
+                target=job[3]
+                if type(target) is not int or not 0<=target<2**256:raise ValueError('Invalid GPU target')
+                result=np.zeros(2,dtype=np.uint32)
+                source=cl.Buffer(context,cl.mem_flags.READ_ONLY|cl.mem_flags.COPY_HOST_PTR,hostbuf=prefix)
+                targets=cl.Buffer(context,cl.mem_flags.READ_ONLY|cl.mem_flags.COPY_HOST_PTR,hostbuf=target.to_bytes(32,'little'))
+                dest=cl.Buffer(context,cl.mem_flags.READ_WRITE|cl.mem_flags.COPY_HOST_PTR,hostbuf=result)
+                finder(queue,(count,),None,source,np.uint32(start),targets,dest)
+                cl.enqueue_copy(queue,result,dest).wait()
+                pipe.send(('nonce',int(result[1]) if result[0] else None))
+                continue
             output=np.empty(count*32,dtype=np.uint8)
             source=cl.Buffer(context,cl.mem_flags.READ_ONLY|cl.mem_flags.COPY_HOST_PTR,hostbuf=prefix)
             dest=cl.Buffer(context,cl.mem_flags.WRITE_ONLY,output.nbytes)
@@ -116,10 +157,14 @@ def _metal_worker(pipe):
 class GPUWorker:
     def __init__(self, stop_file, state_file=None):
         self.stop_file=Path(stop_file);self.state_file=Path(state_file) if state_file else self.stop_file.with_name('gpu-status.json')
-        self.process=None;self.paused=False;self.last_sample=None;self.checked=0
+        self.process=None;self.paused=False;self.last_sample=None;self.checked=0;self.cool_until=0
         self.latch=self.stop_file.with_name('GPU-SAFETY-STOP')
         if self.latch.exists():raise RuntimeError('GPU safety stop is latched. Check cooling before removing GPU-SAFETY-STOP to retry.')
         self.sample(force=True)
+        while self.paused and not self.stop_file.exists():
+            time.sleep(.25)
+            self.sample()
+        if self.stop_file.exists():raise RuntimeError('Mining stop requested')
         context=mp.get_context('spawn');self.pipe,child=context.Pipe()
         self.process=context.Process(target=_worker,args=(child,),daemon=True);self.process.start();child.close()
         try:
@@ -148,23 +193,27 @@ class GPUWorker:
         if not force and time.monotonic()-self.checked<1:return
         try:
             value=telemetry();decision=thermal_state(value,self.paused)
-            self.last_sample=value;self.paused=decision=='pause';self.checked=time.monotonic()
-            state={**value,'phase':decision,'updated_at':time.time(),'duty_cycle_max':0.10,'hard_stop_c':75,'pause_c':68,'resume_c':66}
-            self.state_file.parent.mkdir(parents=True,exist_ok=True)
-            temporary=self.state_file.with_suffix('.tmp');temporary.write_text(json.dumps(state,indent=2));temporary.replace(self.state_file)
-            if decision=='stop':raise RuntimeError('GPU safety threshold reached; manually restart after checking cooling')
+            self.last_sample=value;self.checked=time.monotonic()
+            if decision=='stop':self.cool_until=self.checked+30
+            if decision=='mine' and self.checked<getattr(self,'cool_until',0):decision='pause'
+            self.paused=decision!='mine'
+            state={**value,'phase':decision,'updated_at':time.time(),'duty_cycle_max':mining_duty(self.stop_file),'hard_stop_c':75,'pause_c':68,'resume_c':66,
+                'hashes_processed':getattr(self,'total_hashes',0)}
+            write_status(self.state_file,state)
         except BaseException as error:
             if hasattr(self,'latch'):self.latch.write_text(str(error)+'\n')
             if hasattr(self,'state_file'):
-                self.state_file.write_text(json.dumps({'phase':'safety_stopped','updated_at':time.time(),'error':str(error),**(self.last_sample or {})}))
+                write_status(self.state_file,{'phase':'safety_stopped','updated_at':time.time(),'error':str(error),**(self.last_sample or {})})
             self.close();raise
 
     def hashes(self,prefix,start,count):
         began=time.monotonic();self.pipe.send((prefix,start,count));kind,raw=self.receive(3)
         if kind!='hashes' or len(raw)!=count*32:raise RuntimeError('Invalid GPU response')
-        # At most 10% hashing duty cycle. Interruptible idle also gives the
+        # Bounded hashing duty cycle. Interruptible idle also gives the
         # OS graphics workload priority without changing global GPU settings.
-        end=time.monotonic()+max(0.05,(time.monotonic()-began)*9)
+        duty=mining_duty(self.stop_file)
+        end=time.monotonic()+max(0.005,(time.monotonic()-began)*(1/duty-1))
+        self.total_hashes=getattr(self,'total_hashes',0)+count
         while time.monotonic()<end and not self.stop_file.exists():
             remaining=max(0,end-time.monotonic())
             if remaining:time.sleep(min(.05,remaining))
@@ -175,6 +224,21 @@ class GPUWorker:
         while time.monotonic()<deadline and not self.stop_file.exists():
             self.sample()
             if self.paused:time.sleep(.2);continue
+            if sys.platform!='darwin':
+                count=262144;began=time.monotonic()
+                self.pipe.send((prefix,start,count,target));kind,nonce=self.receive(3)
+                if kind!='nonce':raise RuntimeError('Invalid GPU search response')
+                self.total_hashes=getattr(self,'total_hashes',0)+count
+                end=time.monotonic()+max(.005,(time.monotonic()-began)*(1/mining_duty(self.stop_file)-1))
+                while time.monotonic()<end and not self.stop_file.exists():time.sleep(max(0,min(.05,end-time.monotonic())))
+                if nonce is not None:
+                    if not start<=nonce<start+count:raise RuntimeError('GPU nonce outside requested range')
+                    header=prefix+struct.pack('<I',nonce)
+                    if int.from_bytes(hashlib.sha256(hashlib.sha256(header).digest()).digest(),'little')>target:raise RuntimeError('GPU result failed CPU validation')
+                    return nonce
+                start+=count
+                if start>2**32-count:return None
+                continue
             count=32768
             raw=self.hashes(prefix,start,count)
             for offset in range(count):

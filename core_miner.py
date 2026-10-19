@@ -226,6 +226,9 @@ def mine(config, stop_file, development=False, owner_limit_enforced=True):
                 from gpu_miner import GPUWorker
                 gpu = GPUWorker(stop_file)
             _mine(config, stop_file, development, owner_limit_enforced, gpu)
+        except RuntimeError:
+            if stop_file.exists():return
+            raise
         finally:
             if gpu: gpu.close()
 
@@ -255,7 +258,14 @@ def _mine(config, stop_file, development=False, owner_limit_enforced=True, gpu=N
         if earned >= limit:
             print('Mining cap reached. Stopped.', flush=True)
             return
-        template = rpc('getblocktemplate', {'rules': ['segwit']})
+        try:
+            template = rpc('getblocktemplate', {'rules': ['segwit']})
+        except RuntimeError as error:
+            if 'Core is not connected' not in str(error):
+                raise
+            print('Waiting for the public peer to reconnect; mining paused.', flush=True)
+            time.sleep(1)
+            continue
         if template['previousblockhash'] != tip:
             continue
         reward = min(template['coinbasevalue'], limit - earned)

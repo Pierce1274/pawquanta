@@ -1,0 +1,30 @@
+name: Approved update metadata maintenance
+on:
+  schedule:
+    - cron: '17 8 * * *'
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: update-metadata-maintenance
+  cancel-in-progress: false
+jobs:
+  renew:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: app
+      - uses: actions/checkout@v4
+        with:
+          ref: wallet-updates
+          path: feed
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install tuf==7.0.1 cryptography==50.0.2
+      - name: Renew freshness for already approved targets
+        env:
+          PQUA_TUF_SNAPSHOT_KEY: ${{ secrets.PQUA_TUF_SNAPSHOT_KEY }}
+          PQUA_TUF_TIMESTAMP_KEY: ${{ secrets.PQUA_TUF_TIMESTAMP_KEY }}
+        run: python app/build-tools/renew-update-metadata.py feed
