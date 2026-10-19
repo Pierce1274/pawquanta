@@ -2,15 +2,19 @@
 
 Independent, experimental public blockchain software. The release page states deployment status; a countdown or repository alone does not certify a launched network.
 
-## Easiest way to mine on Windows
+## Wallet and miner downloads
 
-1. Open [the mainnet release](https://github.com/Pierce1274/pawquanta/releases/tag/mainnet-v0.2.0) and download **Pawquanta-Wallet-Windows-x64.zip** when available.
-2. Extract the entire ZIP into a folder you can write to. Open **Pawquanta-Wallet.exe**.
+1. Open [the mainnet release](https://github.com/Pierce1274/pawquanta/releases/tag/mainnet-v0.4.2) and choose the Windows or Apple Silicon Mac package.
+2. Extract the entire ZIP into a folder you can write to. Open **Pawquanta-Wallet.exe** on Windows or **Pawquanta-Wallet.app** on Mac.
 3. Click **Connect**. The verified network connection downloads automatically. No Python installation or terminal commands are needed.
-4. Use **Receive / copy address**, **Send coins**, **Start mining**, or **Stop mining**. The official application's mining start is October 18, 2026 at 08:00 PDT (15:00 UTC).
+4. Use **Receive / copy address**, **Send coins**, **Start mining**, or **Stop mining**.
 5. Use **Show backup folder** and privately copy your encrypted backup and recovery password to separate storage. Never upload or share your wallet folder.
 
-Windows packages are unsigned. Match downloads against the release's SHA256SUMS.txt. Mining uses one CPU worker and does not guarantee income. Rewards mature after 100 blocks.
+Windows packages are unsigned; Mac packages are ad-hoc signed and not notarized. Compare downloads with the release's **SHA256SUMS**. CPU mining and optional NVIDIA/Apple Metal modes are available; Apple GPU support is a preview. Mining does not guarantee income. Rewards mature after 100 blocks.
+
+Version 0.4.2 introduces automatic publisher-approved updates. Older installations need one manual upgrade. Updates check every fifteen minutes while the wallet is open and can be disabled in the wallet. Daily signed-metadata maintenance runs automatically. See [Updates and security](UPDATES-AND-SECURITY.md).
+
+The wallet pauses outgoing payments if previously observed chain history changes and requires inputs with twelve confirmations. These safeguards do not prevent majority-hash attacks. Independent mining power is still essential.
 
 ## The network
 
