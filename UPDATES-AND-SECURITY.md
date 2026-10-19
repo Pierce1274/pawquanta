@@ -7,8 +7,8 @@ Version 0.4.2 introduces publisher-approved updates using The Update Framework
 to remotely add an updater to an older installed wallet.
 
 The visible **Automatically install publisher-approved updates** setting is on
-by default and can be disabled. While the wallet is open it checks every six
-hours. A verified update downloads in the background and displays a 30-second
+by default and can be disabled. While the wallet is open it checks every fifteen
+minutes. A verified update downloads in the background and displays a 30-second
 restart notice. Uncheck automatic updates to defer installation.
 
 An update waits for an active payment interaction to finish, stops mining and

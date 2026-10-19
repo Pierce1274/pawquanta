@@ -12,6 +12,12 @@ import zipfile
 from wallet_updates import WalletUpdates,extract_package
 
 class UpdatesTests(unittest.TestCase):
+    def test_existing_personal_folder_is_preserved(self):
+        with tempfile.TemporaryDirectory() as d:
+            file=Path(d)/'personal.txt';file.write_text('keep this')
+            with self.assertRaises(ValueError):WalletUpdates(d,b'not used')
+            self.assertEqual(file.read_text(),'keep this')
+
     def test_archive_escape_and_duplicate_paths_rejected(self):
         with tempfile.TemporaryDirectory() as d:
             d=Path(d)

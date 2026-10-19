@@ -13,6 +13,16 @@ class Value:
     def configure(self,**values):pass
 
 class WalletShutdownTests(unittest.TestCase):
+    def test_auto_update_waits_for_payment_and_preserves_mining_intent(self):
+        from unittest.mock import Mock
+        with tempfile.TemporaryDirectory() as directory:
+            app=core_wallet.WalletApp.__new__(core_wallet.WalletApp)
+            app.updates=object();app.auto_update=Mock();app.auto_update.get.return_value=True
+            app.closing=False;app.sending=True;app.window=Mock();app.close=Mock()
+            app.apply_update();app.close.assert_not_called();self.assertEqual(app.window.after.call_args.args[0],5000)
+            app.sending=False;app.worker=Mock();app.worker.is_alive.return_value=True;app.stop_file=Path(directory)/'STOP'
+            app.apply_update();app.close.assert_called_once();self.assertTrue(app.resume_after_update)
+
     def test_close_waits_for_connect_before_stopping_its_node(self):
         started=threading.Event();allow_start=threading.Event();order=[]
         class Node:

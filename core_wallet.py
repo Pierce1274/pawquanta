@@ -71,7 +71,7 @@ class WalletApp:
                     release=self.updates.check()
                     if release:self.events.put(('update_ready',release));return
                 except Exception as error:self.events.put(('update_status','Update check unavailable; wallet continues working. '+str(error)))
-            for _ in range(6*60*60):
+            for _ in range(15*60):
                 if self.closing:return
                 time.sleep(1)
 
@@ -104,7 +104,8 @@ class WalletApp:
                 self.guard=ChainGuard(self.profile/'chain-monitor.json')
                 self.events.put(('connected',None))
                 while not self.closing and self.runtime and self.runtime.process.poll() is None:
-                    self.events.put(('chain',self.guard.observe(self.runtime.rpc)))
+                    try:self.events.put(('chain',self.guard.observe(self.runtime.rpc)))
+                    except (OSError,ValueError,RuntimeError) as error:self.events.put(('chain_error',str(error)))
                     self.events.put(('snapshot',self.runtime.snapshot()));time.sleep(3)
             except Exception as error:
                 if not self.closing:
@@ -192,6 +193,7 @@ class WalletApp:
             kind,value=self.events.get()
             if kind=='status':self.status.set(value)
             elif kind=='chain':self.chain_status.set('PAYMENTS PAUSED — '+value['reason'] if value.get('halted') else 'Chain monitor active. Low-hashrate PoW remains vulnerable to majority attacks.')
+            elif kind=='chain_error':self.chain_status.set('PAYMENTS PAUSED — Chain monitor unavailable: '+value)
             elif kind=='update_status':self.status.set(value)
             elif kind=='update_ready':
                 self.update_ready=value

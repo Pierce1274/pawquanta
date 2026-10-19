@@ -29,7 +29,12 @@ class ChainGuard:
             self.path.parent.mkdir(parents=True,exist_ok=True)
             # A failure to persist monitoring must block payments rather than
             # silently erase the baseline. Existing files are never deleted.
-            temporary=self.path.with_suffix('.tmp');temporary.write_text(json.dumps(self.state,indent=2));temporary.replace(self.path)
+            temporary=self.path.with_suffix('.tmp');temporary.write_text(json.dumps(self.state,indent=2))
+            for attempt in range(30):
+                try:temporary.replace(self.path);break
+                except PermissionError:
+                    if attempt==29:raise
+                    time.sleep(.02)
             return dict(self.state)
 
     def require_payments(self,rpc):
