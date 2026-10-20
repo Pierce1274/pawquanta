@@ -155,6 +155,9 @@ class WalletApp:
             amount=Decimal(budget);units=amount*UNIT
             if not amount.is_finite() or units!=units.to_integral_value() or not 0<units<=42_000_000*UNIT:raise ValueError()
         except (DecimalException,ValueError):messagebox.showerror('Mining limit','Enter a positive amount, with at most eight decimal places.');return
+        if not resume:
+            from mining_schedule import cancel
+            cancel(self.profile)
         if self.stop_file.exists():self.stop_file.unlink()
         (self.profile/'mining-preferences.json').write_text(json.dumps({'limit_atomic_units':int(units),'gpu':self.gpu.get()}))
         config={'armed':True,'network':'pawquanta-main-v1','genesis':MAIN_GENESIS,
@@ -169,7 +172,10 @@ class WalletApp:
             except Exception as error:self.events.put(('error',str(error)))
         self.worker=threading.Thread(target=work,daemon=True);self.worker.start()
 
-    def stop_mining(self):
+    def stop_mining(self,cancel_schedule=True):
+        if cancel_schedule:
+            from mining_schedule import cancel
+            cancel(self.profile)
         if self.profile.exists():self.stop_file.touch()
         self.status.set('Stopping mining…')
 
@@ -217,6 +223,22 @@ class WalletApp:
         messagebox.showinfo('Wallet backup','Keep the encrypted backup and recovery-password file somewhere safe.\nNever upload or share either file. Your wallet data is private to this computer.')
 
     def poll(self):
+        if not self.closing:
+            try:
+                from mining_schedule import read as read_schedule,update as update_schedule
+                schedule=read_schedule(self.profile)
+                if schedule and schedule['state']=='paused':
+                    if time.time()<schedule['resume_at_utc']:
+                        self.resume_when_synced=False
+                        if self.worker and self.worker.is_alive():self.stop_file.touch()
+                        self.status.set('Mining paused by schedule. Automatic resume is scheduled; Stop mining cancels it.')
+                    else:
+                        update_schedule(self.profile,schedule,'resume_requested');self.resume_when_synced=True
+                        if not self.runtime and not (self.connection_worker and self.connection_worker.is_alive()):self.connect()
+            except (OSError,ValueError,KeyError) as error:
+                self.resume_when_synced=False
+                if self.profile.exists():self.stop_file.touch()
+                self.status.set('Mining schedule needs attention: '+str(error))
         try:
             compute=json.loads((self.profile/'pdcrm-status.json').read_text())
             if time.time()-compute['updated_at']<15:
@@ -259,7 +281,7 @@ class WalletApp:
 
     def close(self):
         self.closing=True
-        self.stop_mining();self.status.set('Safely closing your wallet and network connection…')
+        self.stop_mining(cancel_schedule=False);self.status.set('Safely closing your wallet and network connection…')
         def work():
             if self.connection_worker:
                 self.connection_worker.join(timeout=365)

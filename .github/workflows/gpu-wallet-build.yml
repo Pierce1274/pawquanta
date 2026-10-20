@@ -41,7 +41,7 @@ jobs:
             build/bin/bitcoin-cli
           key: macos-arm64-native-v1-${{ hashFiles('core/**') }}
       - name: Accounting and safety tests
-        run: python -m unittest test_gpu_miner test_core_miner test_core_runtime test_core_wallet test_wallet_updates test_chain_guard test_pdcrm -v
+        run: python -m unittest test_gpu_miner test_core_miner test_core_runtime test_core_wallet test_wallet_updates test_chain_guard test_pdcrm test_mining_schedule -v
       - name: Compile Metal and package Apple Silicon GUI
         run: python build-tools/package-macos.py
       - name: Verify updater can extract the actual package
