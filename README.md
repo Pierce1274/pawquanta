@@ -37,3 +37,5 @@ The founder's client has a voluntary stop limit of 1,260,000 PQUA in canonical m
 - GitHub Actions contains native builds and tests. Release notes identify the exact native and desktop source commits used by the published packages.
 
 The old Python research edition and its practice balances are separate. See [RESEARCH-README.md](RESEARCH-README.md). Do not use `pawquanta.py` or the research-v0.1.0 practice miner to join this public chain; practice coins do not transfer.
+
+The desktop wallet opens with a short animated Pawquanta splash. Select Open wallet or press Escape to skip it. Set PAWQUANTA_REDUCED_MOTION=1 for motion-free startup. The reveal bar is decorative startup animation, not blockchain synchronization progress.
