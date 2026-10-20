@@ -18,7 +18,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 DEFAULTS={'cpu_workers':0,'cpu_duty':.5,'gpu_duty':.3}
 
-def memory_worker_limit():
+def memory_worker_limit(existing=0):
     """Reserve host memory; refuse to spawn a process per core blindly."""
     try:
         if sys.platform=='win32':
@@ -34,6 +34,9 @@ def memory_worker_limit():
             page=int(re.search(r'page size of (\d+)',text).group(1))
             available=sum(int(re.search(r'Pages '+name+r':\s+(\d+)',text).group(1)) for name in ('free','inactive','speculative'))*page
         else:available=os.sysconf('SC_AVPHYS_PAGES')*os.sysconf('SC_PAGE_SIZE')
+        # Existing workers are already charged against free memory. Credit their
+        # reserved budget to avoid repeatedly shrinking/recreating the farm.
+        available+=existing*256*1024**2
         return max(0,min(64,int((available-1024**3)//(256*1024**2))))
     except Exception:return 0
 
@@ -171,7 +174,7 @@ class DynamicSearch:
             self.shutdown.wait(.5)
 
     def _cpu_round(self,prefix,target,value):
-        count=min(value['cpu_workers'],memory_worker_limit())
+        count=min(value['cpu_workers'],memory_worker_limit(self.count))
         if not count:
             if self.farm:self.farm.close();self.farm=None
             self.count=0;return None
@@ -208,7 +211,7 @@ class DynamicSearch:
                 digest=hashlib.sha256(hashlib.sha256(prefix+struct.pack('<I',nonce)).digest()).digest()
                 if int.from_bytes(digest,'little')>target:raise RuntimeError('Compute worker returned invalid proof of work')
                 return nonce
-        if not any(n is not None for n in results):self.shutdown.wait(.2 if not self.gpu and not self.gate.is_set() else .02)
+        if not any(n is not None for n in results):self.shutdown.wait(.2 if not self.gpu and (not self.gate.is_set() or not self.count) else .02)
         return None
 
     def close(self):
