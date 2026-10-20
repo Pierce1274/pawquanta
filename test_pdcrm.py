@@ -10,6 +10,11 @@ from unittest.mock import patch
 import pdcrm
 
 class ResourceTests(unittest.TestCase):
+    def test_thermal_headroom_is_not_a_cpu_temperature(self):
+        distance={'Identifier':'/intelcpu/0/temperature/0','Name':'CPU Core #1 Distance to TjMax','Value':15}
+        with self.assertRaises(RuntimeError):pdcrm.validate_cpu_rows([distance])
+        actual={'Identifier':'/intelcpu/0/temperature/1','Name':'CPU Package','Value':85}
+        self.assertEqual(pdcrm.validate_cpu_rows([distance,actual])['temperature_c'],85)
     def test_settings_and_thermal_hysteresis(self):
         with tempfile.TemporaryDirectory() as d:
             for v in [float('nan'),0,1.1,True]:

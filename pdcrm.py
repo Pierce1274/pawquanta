@@ -70,10 +70,17 @@ def cpu_telemetry():
         return telemetry()  # Apple's system thermal pressure covers CPU and GPU.
     if sys.platform!='win32':raise RuntimeError('CPU thermal monitoring is unavailable on this platform')
     # Read an existing provider; never download/install a kernel driver implicitly.
-    script=r"""$ErrorActionPreference='Stop'; $s = @(Get-CimInstance -Namespace root\LibreHardwareMonitor -ClassName Sensor | Where-Object { $_.SensorType -eq 'Temperature' -and $_.Identifier -match '^/(intelcpu|amdcpu)/' }); if ($s.Count -eq 0) { throw 'No CPU temperature sensors' }; $s | Select-Object Identifier,Value | ConvertTo-Json -Compress"""
+    script=r"""$ErrorActionPreference='Stop'; $s = @(Get-CimInstance -Namespace root\LibreHardwareMonitor -ClassName Sensor | Where-Object { $_.SensorType -eq 'Temperature' -and $_.Identifier -match '^/(intelcpu|amdcpu)/' }); if ($s.Count -eq 0) { throw 'No CPU temperature sensors' }; $s | Select-Object Identifier,Name,Value | ConvertTo-Json -Compress"""
     result=subprocess.run(['powershell.exe','-NoProfile','-NonInteractive','-Command',script],capture_output=True,text=True,timeout=4,check=True,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
     rows=json.loads(result.stdout);rows=rows if isinstance(rows,list) else [rows]
-    values=[float(row['Value']) for row in rows if row.get('Value') is not None]
+    return validate_cpu_rows(rows)
+
+def validate_cpu_rows(rows):
+    import re
+    selected=[row for row in rows if re.match(r'^/(intelcpu|amdcpu)/',row.get('Identifier',''),re.I)
+        and re.search(r'Package|Core|Tctl|Tdie|CCD',row.get('Name',''),re.I)
+        and not re.search(r'Distance|TjMax|Critical|Limit|Offset',row.get('Name',''),re.I)]
+    values=[float(row['Value']) for row in selected if row.get('Value') is not None]
     if not values or any(not math.isfinite(v) or not 0<v<120 for v in values):raise RuntimeError('CPU temperature readings invalid')
     return {'temperature_c':max(values),'source':'LibreHardwareMonitor CPU sensors'}
 
