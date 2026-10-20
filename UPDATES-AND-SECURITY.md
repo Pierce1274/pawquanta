@@ -1,4 +1,4 @@
-# Updates and network security — v0.4.2
+# Updates and network security — v0.5.0
 
 ## Automatic application updates
 
@@ -86,3 +86,18 @@ to the `wallet-updates` branch. Never publish the protected signing folder.
 The release pipeline must update the application VERSION and SERIAL values
 alongside the package version. The packaged trust root must remain compatible
 with existing clients; rotate roots through TUF's signed root-rotation process.
+
+
+## PDCRM resource management
+
+v0.5.0 adds the Pawquanta Dynamic Compute Resource Manager. Open **PDCRM — CPU + GPU resources** to set CPU worker count (logical processors), CPU duty and GPU duty. CPU and GPU can hash concurrently. Duty settings are budgets for bounded work batches, not guaranteed operating-system utilization. CPU and GPU search disjoint nonce ranges; the wallet coordinator alone verifies and submits winners under the existing cumulative mining quota. No consensus or balance changes are made.
+
+CPU workers start at zero until selected. GPU enablement is still selected separately in the wallet; changing that selection takes effect on the next mining start. Worker counts and duty settings apply live. An existing GPU performance setting is retained unless PDCRM settings are saved.
+
+Windows CPU hashing requires an existing, functioning Libre Hardware Monitor WMI provider with actual Intel/AMD CPU temperatures. If unavailable, CPU workers do not hash; an enabled, monitored GPU may continue. The wallet does not install sensor drivers, elevate itself, bypass antivirus or treat ACPI/GPU temperatures as CPU-core temperatures. Installing a hardware monitor is a separate operator decision; use its official project and review its driver requirements. On supported Apple Silicon builds, Apple's system thermal pressure applies to both CPU and GPU. This is not a measured CPU temperature.
+
+Policy limits are deliberately conservative, not inferred manufacturer ratings: CPU pauses at 80°C, resumes at 70°C, and stops work at 85°C with at least 30 seconds cooldown. GPU retains its existing 68/66/75°C thresholds and power limits. Detected heat on either monitored component pauses both hashing paths. CPU heat remains latched until a verified cool reading even if CPU telemetry fails. Unavailable CPU readings prevent CPU work; GPU telemetry/worker failures retain the existing stop latch. Normal cooldown resumes automatically. These controls stop mining, not the computer, and cannot guarantee protection against hardware, firmware or driver failures.
+
+CPU reads have a four-second timeout; no new CPU batch starts when the last successful read is over five seconds old. Individual CPU hashing rounds are bounded to about 0.2 seconds, checked every 256 hashes, with interruptible coordination. This is software monitoring, not a real-time hardware thermal cutoff. Leave the operating system and firmware protections enabled. If temperatures are unavailable, do not interpret that as proof the hardware is cool.
+
+The packaged-wallet checks exercise real spawned CPU processes against a private native chain and prove that a one-atomic-unit reward quota is not exceeded. CPU/GPU scheduling is additionally tested with deterministic worker fixtures. GPU hardware support and physical test limits remain those documented in GPU-MINING.md. CPU sensors on each user's computer must be verified separately.

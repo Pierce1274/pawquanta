@@ -26,7 +26,7 @@ commit=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
 manifest.pop('package_sha256',None)
 manifest.update(windows_node_file='node/pawquanta-node',windows_node_sha256=hashlib.sha256((node/'pawquanta-node').read_bytes()).hexdigest(),
     source_commit=commit,desktop_source_commit=commit,build_run=os.environ.get('GITHUB_RUN_ID'),
-    platform='macos-apple-silicon',release_url='https://github.com/Pierce1274/pawquanta/releases/tag/mainnet-v0.4.2',wallet_version='0.4.2')
+    platform='macos-apple-silicon',release_url='https://github.com/Pierce1274/pawquanta/releases/tag/mainnet-v0.5.0',wallet_version='0.5.0')
 (package/'core-release.json').write_text(json.dumps(manifest,indent=2)+'\n')
 # Bundle non-system Homebrew dependencies and rewrite Mach-O paths. Do this
 # before ad-hoc signing; no dependency on the build machine's /opt/homebrew.
@@ -56,7 +56,7 @@ assert hashlib.sha256((node/'pawquanta-node').read_bytes()).hexdigest()==manifes
 check=root/'mac-wallet-selftest'
 subprocess.run([str(package/'Pawquanta-Wallet'),'--self-test','--self-test-data',str(check)],check=True,timeout=300)
 result=json.loads((check/'self-test-result.json').read_text())
-assert result['passed'] and result['real_reorg_alarm_persisted'] and result['minimum_12_confirmation_send']
+assert result['passed'] and result['real_reorg_alarm_persisted'] and result['minimum_12_confirmation_send'] and result['pdcrm_spawned_cpu_native_block_and_exact_quota']
 shutil.copy2(root/'core/COPYING',root/'dist/CORE-LICENSE.txt')
 (root/'dist/START-HERE.txt').write_text('Pawquanta Mainnet — experimental Apple Silicon preview\nOpen Pawquanta-Wallet.app, Connect, then optionally select Apple Metal GPU and Start mining.\nNot notarized. GPU must pass the on-device SHA256d self-check before mining.\nApple GPU hardware has not been verified on this build host. No M5 Max performance claim.\nWallet data: ~/Library/Application Support/Pawquanta. Keep backups and password private.\nStop mining stops hashing; no clock/fan/voltage changes.\n')
 subprocess.run(['ditto','-c','-k','--sequesterRsrc','--keepParent',str(root/'dist/Pawquanta-Wallet.app'),str(root/'Pawquanta-Wallet-macOS-Apple-Silicon.zip')],check=True)

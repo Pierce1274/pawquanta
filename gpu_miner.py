@@ -31,6 +31,9 @@ def write_status(path, state):
 
 def mining_duty(stop_file):
     try:
+        if Path(stop_file).with_name('pdcrm.json').exists():
+            from pdcrm import settings
+            return settings(Path(stop_file).parent)['gpu_duty']
         value=json.loads(Path(stop_file).with_name('gpu-performance.json').read_text())['duty_cycle']
         if type(value) not in (float,int) or not .05<=value<=.5:raise ValueError('Invalid GPU duty cycle')
         return float(value)
@@ -222,6 +225,8 @@ class GPUWorker:
     def search(self,prefix,target,seconds=1):
         deadline=time.monotonic()+seconds;start=0
         while time.monotonic()<deadline and not self.stop_file.exists():
+            if not getattr(self,'external_thermal_gate',lambda:True)():
+                time.sleep(.05);continue
             self.sample()
             if self.paused:time.sleep(.2);continue
             if sys.platform!='darwin':
@@ -237,7 +242,7 @@ class GPUWorker:
                     if int.from_bytes(hashlib.sha256(hashlib.sha256(header).digest()).digest(),'little')>target:raise RuntimeError('GPU result failed CPU validation')
                     return nonce
                 start+=count
-                if start>2**32-count:return None
+                if start>2**31-count:return None
                 continue
             count=32768
             raw=self.hashes(prefix,start,count)

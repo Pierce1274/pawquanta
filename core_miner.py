@@ -221,15 +221,20 @@ def mining_limit(value, owner_limit_enforced=True):
 def mine(config, stop_file, development=False, owner_limit_enforced=True):
     with exclusive_miner(config['ledger_file']):
         gpu = None
+        dynamic = None
         try:
             if config.get('gpu') is True:
                 from gpu_miner import GPUWorker
                 gpu = GPUWorker(stop_file)
-            _mine(config, stop_file, development, owner_limit_enforced, gpu)
+            if config.get('pdcrm') is True:
+                from pdcrm import DynamicSearch
+                dynamic=DynamicSearch(stop_file,gpu)
+            _mine(config, stop_file, development, owner_limit_enforced, dynamic or gpu)
         except RuntimeError:
             if stop_file.exists():return
             raise
         finally:
+            if dynamic:dynamic.close()
             if gpu: gpu.close()
 
 

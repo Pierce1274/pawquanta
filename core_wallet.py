@@ -14,6 +14,7 @@ from core_tor import TorClient
 from core_miner import mine,UNIT,APPROVED_LIMIT
 from chain_guard import ChainGuard
 from wallet_updates import WalletUpdates,VERSION,launch as launch_updated
+from pdcrm import settings as compute_settings,save_settings as save_compute_settings
 
 BASE=Path(sys.executable).resolve().parent if getattr(sys,'frozen',False) else Path(__file__).resolve().parent
 PROFILE=Path.home()/'Library/Application Support/Pawquanta' if sys.platform=='darwin' else BASE/'Pawquanta-wallet-data'
@@ -28,7 +29,7 @@ class WalletApp:
         self.closing=False
         self.profile=PROFILE;self.stop_file=self.profile/'STOP-MINING'
         self.guard=None;self.update_ready=None;self.sending=False;self.updates=None;self.resume_after_update=False
-        window.title('Pawquanta '+VERSION+' — Wallet & Miner');window.geometry('780x650');window.minsize(740,600)
+        window.title('Pawquanta '+VERSION+' — Wallet & Miner');window.geometry('820x740');window.minsize(780,700)
         style=ttk.Style();style.theme_use('clam')
         style.configure('TFrame',background='#111820');style.configure('TLabel',background='#111820',foreground='#edf1f4',font=('Segoe UI',11))
         style.configure('Title.TLabel',font=('Segoe UI',26,'bold'));style.configure('Balance.TLabel',font=('Segoe UI',20,'bold'))
@@ -48,6 +49,9 @@ class WalletApp:
         ttk.Button(buttons,text='Stop mining',command=self.stop_mining).pack(side='left',padx=7)
         self.gpu=tk.BooleanVar(value=False)
         ttk.Checkbutton(frame,text='Use NVIDIA / Apple Metal GPU (guarded, low load)',variable=self.gpu).pack(anchor='w')
+        ttk.Button(frame,text='PDCRM — CPU + GPU resources',command=self.resource_settings).pack(anchor='w',pady=4)
+        self.compute_status=tk.StringVar(value='PDCRM: CPU requires verified temperature telemetry; GPU uses its watchdog.')
+        ttk.Label(frame,textvariable=self.compute_status,wraplength=720).pack(anchor='w',pady=3)
         bootstrap=BASE/'update-root.json'
         if bootstrap.exists() and not UPDATES_TEST_MODE:self.updates=WalletUpdates(UPDATE_STORE,bootstrap.read_bytes(),self.progress)
         self.auto_update=tk.BooleanVar(value=self.updates.enabled() if self.updates else False)
@@ -60,9 +64,26 @@ class WalletApp:
         ttk.Button(actions,text='Receive / copy address',command=self.receive).pack(side='left',padx=(0,7))
         ttk.Button(actions,text='Send coins',command=self.send).pack(side='left',padx=7)
         ttk.Button(actions,text='Show backup folder',command=self.backup_folder).pack(side='left',padx=7)
-        ttk.Label(frame,text='Choose CPU or guarded NVIDIA / Apple Metal GPU mining. GPU pauses when hot.\nNew coins mature after 100 blocks. Coins have no established value or guaranteed income.',wraplength=670).pack(anchor='w',pady=(16,0))
+        ttk.Label(frame,text='PDCRM supports simultaneous CPU + GPU hashing with one mining quota.\nUnavailable temperature sensors pause the affected worker. New coins mature after 100 blocks.\nCoins have no established value or guaranteed income.',wraplength=720).pack(anchor='w',pady=(12,0))
         window.protocol('WM_DELETE_WINDOW',self.close);window.after(200,self.poll)
         if self.updates:threading.Thread(target=self.update_loop,daemon=True).start()
+
+    def resource_settings(self):
+        import os
+        panel=tk.Toplevel(self.window);panel.title('PDCRM — compute resources');panel.geometry('610x440')
+        frame=ttk.Frame(panel,padding=20);frame.pack(fill='both',expand=True)
+        value=compute_settings(self.profile)
+        cpu=tk.IntVar(value=value['cpu_workers']);cpu_duty=tk.IntVar(value=round(value['cpu_duty']*100));gpu_duty=tk.IntVar(value=round(value['gpu_duty']*100))
+        ttk.Label(frame,text='Pawquanta Dynamic Compute Resource Manager',font=('Segoe UI',14,'bold')).pack(anchor='w')
+        for label,variable,lower,upper in [('CPU workers (logical processors)',cpu,0,min(64,os.cpu_count() or 1)),('CPU work duty (%)',cpu_duty,5,100),('GPU work duty (%)',gpu_duty,5,100)]:
+            row=ttk.Frame(frame);row.pack(fill='x',pady=8);ttk.Label(row,text=label).pack(side='left');ttk.Spinbox(row,from_=lower,to=upper,textvariable=variable,width=8).pack(side='right')
+        ttk.Label(frame,text='CPU and GPU can run together. Duty is a work budget, not a guarantee of\nTask Manager utilization. CPU: pause 80°C / resume 70°C / stop 85°C.\nGPU: pause 68°C / resume 66°C / stop 75°C, plus power limits.\nApple uses system thermal pressure instead of invented temperatures.\nWindows CPU mining needs an existing Libre Hardware Monitor WMI provider.\nNo sensor means no CPU hashing. The app never installs a kernel driver.\nThese are conservative policy limits, not your manufacturer’s ratings.',wraplength=560).pack(anchor='w',pady=10)
+        def apply():
+            try:
+                save_compute_settings(self.profile,{'cpu_workers':cpu.get(),'cpu_duty':cpu_duty.get()/100,'gpu_duty':gpu_duty.get()/100})
+                self.compute_status.set('PDCRM settings saved. CPU remains paused unless verified telemetry is available.');panel.destroy()
+            except (ValueError,tk.TclError,OSError) as error:messagebox.showerror('PDCRM',str(error),parent=panel)
+        ttk.Button(frame,text='Apply live resource settings',command=apply).pack(anchor='w')
 
     def update_loop(self):
         while not self.closing:
@@ -132,7 +153,7 @@ class WalletApp:
         config={'armed':True,'network':'pawquanta-main-v1','genesis':MAIN_GENESIS,
             'rpc_url':self.runtime.wallet.url,'cookie_file':str(self.runtime.wallet.cookie),
             'receiving_address':self.address,'ledger_file':str(self.profile/'mining-rewards.sqlite'),
-            'limit_atomic_units':int(units),'not_before_utc_epoch':LAUNCH_EPOCH,'gpu':self.gpu.get()}
+            'limit_atomic_units':int(units),'not_before_utc_epoch':LAUNCH_EPOCH,'gpu':self.gpu.get(),'pdcrm':True}
         def work():
             try:
                 self.progress('Mining scheduled for launch' if time.time()<LAUNCH_EPOCH else ('Mining with guarded NVIDIA GPU…' if config['gpu'] else 'Mining with one CPU worker…'))
@@ -189,6 +210,11 @@ class WalletApp:
         messagebox.showinfo('Wallet backup','Keep the encrypted backup and recovery-password file somewhere safe.\nNever upload or share either file. Your wallet data is private to this computer.')
 
     def poll(self):
+        try:
+            compute=json.loads((self.profile/'pdcrm-status.json').read_text())
+            if time.time()-compute['updated_at']<15:
+                cpu=compute['cpu'];self.compute_status.set(f"PDCRM: CPU {cpu.get('phase','unknown')} · {compute['cpu_workers_requested']} requested workers · GPU {'enabled' if compute['gpu_enabled'] else 'off'}")
+        except (OSError,ValueError,KeyError,AttributeError):pass
         while not self.events.empty():
             kind,value=self.events.get()
             if kind=='status':self.status.set(value)
@@ -255,6 +281,24 @@ def self_test(directory,manifest):
                 assert runtime.rpc('submitblock',(block_header+body).hex()) is None;break
         else:raise AssertionError('Private test work was not found')
         for _ in range(21):runtime.wallet('generatetoaddress',5,address)
+        # Real spawned CPU workers, native block validation and a one-atomic-unit
+        # quota. Sensor readings are fixtures here, never a hardware claim.
+        from unittest.mock import patch
+        from pdcrm import save_settings as save_pdcrm
+        from core_miner import mine as mine_pdcrm
+        compute_profile=runtime.directory/'pdcrm-private-check';compute_profile.mkdir()
+        save_pdcrm(compute_profile,{'cpu_workers':2,'cpu_duty':1,'gpu_duty':.5})
+        compute_address=runtime.wallet('getnewaddress','pdcrm-private-check')
+        config={'armed':True,'genesis':runtime.genesis,'rpc_url':runtime.wallet.url,
+            'cookie_file':str(runtime.wallet.cookie),'receiving_address':compute_address,
+            'ledger_file':str(compute_profile/'quota.sqlite'),'limit_atomic_units':1,
+            'not_before_utc_epoch':0,'pdcrm':True,'gpu':False}
+        with patch('pdcrm.cpu_telemetry',return_value={'temperature_c':50}):
+            mine_pdcrm(config,compute_profile/'STOP',development=True,owner_limit_enforced=False)
+        import sqlite3
+        with sqlite3.connect(compute_profile/'quota.sqlite') as database:
+            assert database.execute('select sum(units) from rewards').fetchone()[0]==1
+        assert json.loads((compute_profile/'pdcrm-status.json').read_text())['cpu_hashes']>0
         guard=ChainGuard(runtime.directory/'private-test-monitor.json',genesis=runtime.genesis)
         guard.observe(runtime.rpc);original=runtime.rpc('getbestblockhash')
         runtime.rpc('invalidateblock',original)
@@ -280,6 +324,7 @@ def self_test(directory,manifest):
             'encrypted_wallet':True,'wallet_locked':True,'backup_exists':(runtime.directory/'wallet-encrypted-backup.dat').is_file(),
             'one_atomic_unit_coinbase':True,'decimal_transfer_confirmed':True,'restart_persistence':True,
             'real_reorg_alarm_persisted':True,'minimum_12_confirmation_send':True,
+            'pdcrm_spawned_cpu_native_block_and_exact_quota':True,
             'public_mainnet_verified':False,'mining_armed':False}
         (Path(directory)/'self-test-result.json').write_text(json.dumps(result,indent=2)+'\n')
         print(json.dumps(result,indent=2))
