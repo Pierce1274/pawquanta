@@ -426,6 +426,8 @@ if __name__=='__main__':
     if arguments.self_test:
         if not arguments.self_test_data:parser.error('--self-test-data is required')
         self_test(arguments.self_test_data,manifest);raise SystemExit()
+    from wallet_splash import enable_native_pixels
+    enable_native_pixels()
     window=tk.Tk();window.withdraw();app=WalletApp(window,manifest)
     app.resume_when_synced=arguments.resume_mining
     if arguments.resume_connection:window.after(100,app.connect)
