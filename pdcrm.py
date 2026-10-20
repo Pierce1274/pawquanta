@@ -18,6 +18,25 @@ from concurrent.futures import ThreadPoolExecutor
 
 DEFAULTS={'cpu_workers':0,'cpu_duty':.5,'gpu_duty':.3}
 
+def memory_worker_limit():
+    """Reserve host memory; refuse to spawn a process per core blindly."""
+    try:
+        if sys.platform=='win32':
+            import ctypes
+            class Memory(ctypes.Structure):
+                _fields_=[('length',ctypes.c_ulong),('load',ctypes.c_ulong)]+[(name,ctypes.c_ulonglong) for name in ('total','available','page_total','page_available','virtual_total','virtual_available','extended')]
+            value=Memory();value.length=ctypes.sizeof(value)
+            if not ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(value)):raise OSError('Memory query failed')
+            available=value.available
+        elif sys.platform=='darwin':
+            import re
+            text=subprocess.check_output(['/usr/bin/vm_stat'],text=True,timeout=2)
+            page=int(re.search(r'page size of (\d+)',text).group(1))
+            available=sum(int(re.search(r'Pages '+name+r':\s+(\d+)',text).group(1)) for name in ('free','inactive','speculative'))*page
+        else:available=os.sysconf('SC_AVPHYS_PAGES')*os.sysconf('SC_PAGE_SIZE')
+        return max(0,min(64,int((available-1024**3)//(256*1024**2))))
+    except Exception:return 0
+
 def settings(profile):
     file=Path(profile)/'pdcrm.json'
     value={**DEFAULTS,**(json.loads(file.read_text()) if file.exists() else {})}
@@ -138,7 +157,7 @@ class DynamicSearch:
                     # real cool sample, even after CPU workers are disabled.
                     if self.cpu_hot:
                         sample=cpu_telemetry()
-                        if cpu_decision(sample,True)=='mine':self.cpu_hot=False
+                        if cpu_decision(sample,True)=='mine' and time.monotonic()>=cool_until:self.cpu_hot=False
                 else:
                     sample=cpu_telemetry();decision=cpu_decision(sample,paused)
                     if decision=='stop':cool_until=time.monotonic()+30
@@ -152,7 +171,7 @@ class DynamicSearch:
             self.shutdown.wait(.5)
 
     def _cpu_round(self,prefix,target,value):
-        count=value['cpu_workers']
+        count=min(value['cpu_workers'],memory_worker_limit())
         if not count:
             if self.farm:self.farm.close();self.farm=None
             self.count=0;return None
@@ -180,7 +199,7 @@ class DynamicSearch:
             # CPU load cannot continue while a monitored GPU is over its limits.
             if self.gpu.paused:self.gate.clear()
         write_status(self.profile/'pdcrm-status.json',{'updated_at':time.time(),'cpu':self.cpu_state,
-            'cpu_workers_requested':value['cpu_workers'],'cpu_duty':value['cpu_duty'],'gpu_duty':value['gpu_duty'],
+            'cpu_workers_requested':value['cpu_workers'],'cpu_workers_allocated':self.count,'cpu_duty':value['cpu_duty'],'gpu_duty':value['gpu_duty'],
             'cpu_hashes':self.cpu_hashes,'gpu_hashes':self.gpu_hashes,'gpu_enabled':self.gpu is not None,
             'limits':{'cpu_pause_c':80,'cpu_resume_c':70,'cpu_stop_c':85,'gpu_pause_c':68,'gpu_resume_c':66,'gpu_stop_c':75},
             'policy':'Conservative limits; no inferred manufacturer rating. Sensor faults pause or stop mining.'})
@@ -189,7 +208,7 @@ class DynamicSearch:
                 digest=hashlib.sha256(hashlib.sha256(prefix+struct.pack('<I',nonce)).digest()).digest()
                 if int.from_bytes(digest,'little')>target:raise RuntimeError('Compute worker returned invalid proof of work')
                 return nonce
-        if not any(n is not None for n in results):self.shutdown.wait(.02)
+        if not any(n is not None for n in results):self.shutdown.wait(.2 if not self.gpu and not self.gate.is_set() else .02)
         return None
 
     def close(self):

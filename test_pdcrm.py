@@ -43,8 +43,29 @@ class ResourceTests(unittest.TestCase):
                 worker=pdcrm.DynamicSearch(Path(d)/'STOP',GPU())
                 try:
                     time.sleep(.05);self.assertEqual(worker.search(bytes(76),2**256-1),0)
-                    self.assertFalse(worker.gate.is_set());farm.return_value.search.assert_not_called()
+                    self.assertFalse(worker.gate.is_set());farm.assert_not_called()
                 finally:worker.close()
+
+    def test_stop_cleans_up_owned_cpu_processes(self):
+        with tempfile.TemporaryDirectory() as d:
+            stop=Path(d)/'STOP';stop.touch();farm=pdcrm.CPUFarm(1)
+            processes=[process for _,process in farm.workers]
+            try:
+                with self.assertRaises(RuntimeError):farm.search(bytes(76),0,.05,stop)
+                self.assertTrue(all(not process.is_alive() for process in processes))
+            finally:farm.close()
+
+    def test_cpu_overheat_stays_latched_when_sensor_fails(self):
+        with tempfile.TemporaryDirectory() as d,patch.object(pdcrm,'cpu_telemetry',side_effect=[{'temperature_c':85},RuntimeError('sensor disappeared')]):
+            pdcrm.save_settings(d,{'cpu_workers':1,'cpu_duty':1,'gpu_duty':1})
+            worker=pdcrm.DynamicSearch(Path(d)/'STOP')
+            try:
+                deadline=time.monotonic()+2
+                while worker.cpu_state.get('phase')!='sensor_unavailable' or not worker.cpu_hot:
+                    if time.monotonic()>deadline:self.fail('Thermal monitor did not reach the sensor-failure state')
+                    time.sleep(.02)
+                self.assertFalse(worker.gate.is_set());self.assertTrue(worker.cpu_hot)
+            finally:worker.close()
 
     def test_cpu_and_gpu_are_concurrent_and_cpu_heat_blocks_gpu(self):
         barrier=threading.Barrier(2)
@@ -56,7 +77,7 @@ class ResourceTests(unittest.TestCase):
             def __init__(self,count):pass
             def search(self,*args):barrier.wait(timeout=3);return 2**31,1
             def close(self):pass
-        with tempfile.TemporaryDirectory() as d,patch.object(pdcrm,'CPUFarm',Farm),patch.object(pdcrm,'cpu_telemetry',return_value={'temperature_c':50}):
+        with tempfile.TemporaryDirectory() as d,patch.object(pdcrm,'CPUFarm',Farm),patch.object(pdcrm,'memory_worker_limit',return_value=2),patch.object(pdcrm,'cpu_telemetry',return_value={'temperature_c':50}):
             pdcrm.save_settings(d,{'cpu_workers':1,'cpu_duty':.5,'gpu_duty':.5})
             gpu=GPU();worker=pdcrm.DynamicSearch(Path(d)/'STOP',gpu)
             try:

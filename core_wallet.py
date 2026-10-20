@@ -69,6 +69,8 @@ class WalletApp:
         if self.updates:threading.Thread(target=self.update_loop,daemon=True).start()
 
     def resource_settings(self):
+        if not self.runtime or not self.address:
+            messagebox.showinfo('PDCRM','Connect your wallet before changing resource settings.');return
         import os
         panel=tk.Toplevel(self.window);panel.title('PDCRM — compute resources');panel.geometry('610x440')
         frame=ttk.Frame(panel,padding=20);frame.pack(fill='both',expand=True)
@@ -139,6 +141,11 @@ class WalletApp:
     def start_mining(self,resume=False):
         if not self.runtime or not self.address:return
         if self.worker and self.worker.is_alive():return
+        try:
+            if not self.gpu.get() and compute_settings(self.profile)['cpu_workers']==0:
+                self.progress('Select GPU mining or choose CPU workers in PDCRM before starting.');return
+        except (OSError,ValueError) as error:
+            self.progress('PDCRM settings need attention: '+str(error));return
         if resume:
             try:budget=str(Decimal(json.loads((self.profile/'mining-preferences.json').read_text())['limit_atomic_units'])/UNIT)
             except (OSError,ValueError,KeyError):self.progress('Mining was not resumed because saved preferences are unavailable.');return
@@ -213,7 +220,7 @@ class WalletApp:
         try:
             compute=json.loads((self.profile/'pdcrm-status.json').read_text())
             if time.time()-compute['updated_at']<15:
-                cpu=compute['cpu'];self.compute_status.set(f"PDCRM: CPU {cpu.get('phase','unknown')} · {compute['cpu_workers_requested']} requested workers · GPU {'enabled' if compute['gpu_enabled'] else 'off'}")
+                cpu=compute['cpu'];self.compute_status.set(f"PDCRM: CPU {cpu.get('phase','unknown')} · {compute.get('cpu_workers_allocated',0)}/{compute['cpu_workers_requested']} workers · GPU {'enabled' if compute['gpu_enabled'] else 'off'}")
         except (OSError,ValueError,KeyError,AttributeError):pass
         while not self.events.empty():
             kind,value=self.events.get()
