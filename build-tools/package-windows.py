@@ -19,7 +19,7 @@ with zipfile.ZipFile(archive) as bundle:
         (package/'node'/name).write_bytes(bundle.read('Pawquanta-Wallet/node/'+name))
 manifest=json.loads((root/'core-release.json').read_text())
 commit=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
-manifest.update(windows_node_file='node/Pawquanta-node.exe',desktop_source_commit=commit,release_url='https://github.com/Pierce1274/pawquanta/releases/tag/mainnet-v0.5.0',wallet_version='0.5.0')
+manifest.update(windows_node_file='node/Pawquanta-node.exe',desktop_source_commit=commit,release_url='https://github.com/Pierce1274/pawquanta/releases/tag/mainnet-v0.5.1',wallet_version='0.5.1')
 assert hashlib.sha256((package/'node/Pawquanta-node.exe').read_bytes()).hexdigest()==manifest['windows_node_sha256']
 (package/'core-release.json').write_text(json.dumps(manifest,indent=2)+'\n')
 for source,destination in [('update-root.json','update-root.json'),('core/COPYING','CORE-LICENSE.txt'),('GPU-MINING.md','GPU-MINING.md'),('UPDATES-AND-SECURITY.md','UPDATES-AND-SECURITY.md')]:shutil.copy2(root/source,package/destination)

@@ -14,7 +14,7 @@ from core_tor import TorClient
 from core_miner import mine,UNIT,APPROVED_LIMIT
 from chain_guard import ChainGuard
 from wallet_updates import WalletUpdates,VERSION,launch as launch_updated
-from pdcrm import settings as compute_settings,save_settings as save_compute_settings
+from pdcrm import settings as compute_settings,save_settings as save_compute_settings,status_text as compute_status_text
 
 BASE=Path(sys.executable).resolve().parent if getattr(sys,'frozen',False) else Path(__file__).resolve().parent
 PROFILE=Path.home()/'Library/Application Support/Pawquanta' if sys.platform=='darwin' else BASE/'Pawquanta-wallet-data'
@@ -72,20 +72,44 @@ class WalletApp:
         if not self.runtime or not self.address:
             messagebox.showinfo('PDCRM','Connect your wallet before changing resource settings.');return
         import os
-        panel=tk.Toplevel(self.window);panel.title('PDCRM — compute resources');panel.geometry('610x440')
+        panel=tk.Toplevel(self.window);panel.title('PDCRM — compute resources');panel.geometry('650x560')
         frame=ttk.Frame(panel,padding=20);frame.pack(fill='both',expand=True)
         value=compute_settings(self.profile)
         cpu=tk.IntVar(value=value['cpu_workers']);cpu_duty=tk.IntVar(value=round(value['cpu_duty']*100));gpu_duty=tk.IntVar(value=round(value['gpu_duty']*100))
         ttk.Label(frame,text='Pawquanta Dynamic Compute Resource Manager',font=('Segoe UI',14,'bold')).pack(anchor='w')
         for label,variable,lower,upper in [('CPU workers (logical processors)',cpu,0,min(64,os.cpu_count() or 1)),('CPU work duty (%)',cpu_duty,5,100),('GPU work duty (%)',gpu_duty,5,100)]:
             row=ttk.Frame(frame);row.pack(fill='x',pady=8);ttk.Label(row,text=label).pack(side='left');ttk.Spinbox(row,from_=lower,to=upper,textvariable=variable,width=8).pack(side='right')
-        ttk.Label(frame,text='CPU and GPU can run together. Duty is a work budget, not a guarantee of\nTask Manager utilization. CPU: pause 80°C / resume 70°C / stop 85°C.\nGPU: pause 68°C / resume 66°C / stop 75°C, plus power limits.\nApple uses system thermal pressure instead of invented temperatures.\nWindows CPU mining needs an existing Libre Hardware Monitor WMI provider.\nNo sensor means no CPU hashing. The app never installs a kernel driver.\nThese are conservative policy limits, not your manufacturer’s ratings.',wraplength=560).pack(anchor='w',pady=10)
+        ttk.Label(frame,text='CPU and GPU can run together. Duty is a work budget, not a guarantee of\nTask Manager utilization. CPU: pause 80°C / resume 70°C / stop 85°C.\nGPU: pause 68°C / resume 66°C / stop 75°C, plus power limits.\nApple uses system thermal pressure instead of invented temperatures.\nWindows CPU mining needs a running CPU-temperature monitor.\nNo sensor means no CPU hashing. The app never installs a kernel driver.\nThese are conservative policy limits, not your manufacturer’s ratings.',wraplength=600).pack(anchor='w',pady=10)
+        ttk.Button(frame,text='CPU temperature setup / check',command=self.cpu_setup).pack(anchor='w',pady=4)
         def apply():
             try:
                 save_compute_settings(self.profile,{'cpu_workers':cpu.get(),'cpu_duty':cpu_duty.get()/100,'gpu_duty':gpu_duty.get()/100})
                 self.compute_status.set('PDCRM settings saved. CPU remains paused unless verified telemetry is available.');panel.destroy()
             except (ValueError,tk.TclError,OSError) as error:messagebox.showerror('PDCRM',str(error),parent=panel)
         ttk.Button(frame,text='Apply live resource settings',command=apply).pack(anchor='w')
+
+    def cpu_setup(self):
+        import webbrowser
+        panel=tk.Toplevel(self.window);panel.title('CPU temperature setup');panel.geometry('650x460')
+        frame=ttk.Frame(panel,padding=20);frame.pack(fill='both',expand=True)
+        ttk.Label(frame,text='CPU mining needs real temperature readings',font=('Segoe UI',15,'bold')).pack(anchor='w')
+        text=('Windows:\n1. With the PC owner’s permission, obtain Libre Hardware Monitor from its official GitHub release. Some sensors require administrator permission.\n2. Keep the monitor running and confirm it shows CPU Package/Core temperatures.\n3. For newer releases, configure Remote Web Server to listen on 127.0.0.1, port 8085, then enable Run. Do not open a router port or expose the monitor to the internet. Older WMI providers remain supported.\n4. Click Check readings below. CPU hashing resumes automatically when valid readings become available and CPU workers are selected.\n\nOn Mac, the supported system thermal-pressure reading is used.\nIntel integrated Arc GPU mining is not supported. No sensors or drivers are installed by this wallet.')
+        ttk.Label(frame,text=text,wraplength=605).pack(anchor='w',pady=12)
+        result=tk.StringVar(value='Checking has not started.')
+        ttk.Label(frame,textvariable=result,wraplength=600).pack(anchor='w',pady=5)
+        def check():
+            result.set('Checking local temperature readings…')
+            def work():
+                try:
+                    from pdcrm import cpu_telemetry
+                    reading=cpu_telemetry()
+                    message=(f"CPU temperature: {reading['temperature_c']:.1f}°C · "+reading.get('source','verified sensor')) if 'temperature_c' in reading else 'System thermal-pressure reading available.'
+                except Exception:message='No verified readings. Keep the monitor running and check the local-only server settings. CPU hashing stays paused.'
+                self.events.put(('sensor_check',(panel,result,message)))
+            threading.Thread(target=work,daemon=True).start()
+        row=ttk.Frame(frame);row.pack(fill='x')
+        ttk.Button(row,text='Check readings',command=check).pack(side='left')
+        ttk.Button(row,text='Official monitor downloads',command=lambda:webbrowser.open('https://github.com/LibreHardwareMonitor/LibreHardwareMonitor/releases')).pack(side='left',padx=10)
 
     def update_loop(self):
         while not self.closing:
@@ -166,7 +190,7 @@ class WalletApp:
             'limit_atomic_units':int(units),'not_before_utc_epoch':LAUNCH_EPOCH,'gpu':self.gpu.get(),'pdcrm':True}
         def work():
             try:
-                self.progress('Mining scheduled for launch' if time.time()<LAUNCH_EPOCH else ('Mining with guarded NVIDIA GPU…' if config['gpu'] else 'Mining with one CPU worker…'))
+                self.progress('Preparing PDCRM workers. Check the live hashing status below; missing sensors pause CPU work.')
                 mine(config,self.stop_file,owner_limit_enforced=False)
                 self.progress('Mining stopped. Your wallet stays connected.')
             except Exception as error:self.events.put(('error',str(error)))
@@ -241,12 +265,16 @@ class WalletApp:
                 self.status.set('Mining schedule needs attention: '+str(error))
         try:
             compute=json.loads((self.profile/'pdcrm-status.json').read_text())
-            if time.time()-compute['updated_at']<15:
-                cpu=compute['cpu'];self.compute_status.set(f"PDCRM: CPU {cpu.get('phase','unknown')} · {compute.get('cpu_workers_allocated',0)}/{compute['cpu_workers_requested']} workers · GPU {'enabled' if compute['gpu_enabled'] else 'off'}")
+            if not self.worker or not self.worker.is_alive() or self.stop_file.exists():self.compute_status.set('Mining stopped. No hashing workers are active.')
+            elif time.time()-compute['updated_at']<5:self.compute_status.set(compute_status_text(compute))
+            else:self.compute_status.set('Waiting for fresh miner telemetry — hashing is not confirmed.')
         except (OSError,ValueError,KeyError,AttributeError):pass
         while not self.events.empty():
             kind,value=self.events.get()
             if kind=='status':self.status.set(value)
+            elif kind=='sensor_check':
+                panel,result,message=value
+                if panel.winfo_exists():result.set(message)
             elif kind=='chain':self.chain_status.set('PAYMENTS PAUSED — '+value['reason'] if value.get('halted') else 'Chain monitor active. Low-hashrate PoW remains vulnerable to majority attacks.')
             elif kind=='chain_error':self.chain_status.set('PAYMENTS PAUSED — Chain monitor unavailable: '+value)
             elif kind=='update_status':self.status.set(value)
@@ -256,8 +284,8 @@ class WalletApp:
                 self.window.after(30000,self.apply_update)
             elif kind=='connected':self.mine_button.configure(state='normal');self.status.set('Encrypted wallet connected. You can receive, send or mine.')
             elif kind=='snapshot':
-                self.balance.set('Spendable: '+value['spendable']+' PQUA');self.maturing.set('Maturing: '+value['maturing']+' PQUA')
-                self.network.set(f"Block {value['height']:,} · {value['peers']} peer connections"+(' · Syncing…' if value['synchronizing'] else ''))
+                self.balance.set('Spendable: '+format(Decimal(value['spendable']),',.8f')+' PQUA');self.maturing.set('Maturing: '+format(Decimal(value['maturing']),',.8f')+' PQUA')
+                self.network.set(f"Block {value['height']:,} of {value.get('headers',value['height']):,} · {value['peers']} peer connections"+(' · Syncing…' if value['synchronizing'] else ''))
                 self.mine_button.configure(state='normal' if value['peers']>0 and not value['synchronizing'] else 'disabled')
                 if getattr(self,'resume_when_synced',False) and value['peers']>0 and not value['synchronizing']:
                     self.resume_when_synced=False

@@ -4,7 +4,7 @@ Independent, experimental public blockchain software. The release page states de
 
 ## Wallet and miner downloads
 
-1. Open [the mainnet release](https://github.com/Pierce1274/pawquanta/releases/tag/mainnet-v0.5.0) and choose the Windows or Apple Silicon Mac package.
+1. Open [the mainnet release](https://github.com/Pierce1274/pawquanta/releases/tag/mainnet-v0.5.1) and choose the Windows or Apple Silicon Mac package.
 2. Extract the entire ZIP into a folder you can write to. Open **Pawquanta-Wallet.exe** on Windows or **Pawquanta-Wallet.app** on Mac.
 3. Click **Connect**. The verified network connection downloads automatically. No Python installation or terminal commands are needed.
 4. Use **Receive / copy address**, **Send coins**, **Start mining**, or **Stop mining**.
@@ -18,7 +18,7 @@ The wallet pauses outgoing payments if previously observed chain history changes
 
 ## PDCRM compute resources
 
-v0.5.0 adds in-app CPU worker and CPU/GPU duty controls with simultaneous hashing under one reward limit. Open **PDCRM — CPU + GPU resources**. Windows CPU mining requires a working CPU-temperature provider; missing sensors pause CPU hashing. Supported Apple Silicon builds use system thermal pressure. The app uses conservative limits and does not claim to discover a universally safe temperature. See [PDCRM safety and requirements](UPDATES-AND-SECURITY.md#pdcrm-resource-management).
+v0.5.0 adds in-app CPU worker and CPU/GPU duty controls with simultaneous hashing under one reward limit. Open **PDCRM — CPU + GPU resources**. Windows CPU mining requires a working CPU-temperature provider (local HTTP for current Libre Hardware Monitor, or legacy WMI); missing sensors pause CPU hashing. Supported Apple Silicon builds use system thermal pressure. The app uses conservative limits and does not claim to discover a universally safe temperature. See [PDCRM safety and requirements](UPDATES-AND-SECURITY.md#pdcrm-resource-management).
 
 ## The network
 

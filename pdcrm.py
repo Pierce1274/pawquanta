@@ -18,6 +18,21 @@ from concurrent.futures import ThreadPoolExecutor
 
 DEFAULTS={'cpu_workers':0,'cpu_duty':.5,'gpu_duty':.3}
 
+def status_text(value):
+    cpu=value.get('cpu',{});phase=cpu.get('phase');requested=value.get('cpu_workers_requested',0)
+    allocated=value.get('cpu_workers_allocated',0)
+    if not requested:cpu_text='CPU off'
+    elif phase=='sensor_unavailable':cpu_text='CPU NOT HASHING: temperature readings missing — open CPU temperature setup'
+    elif phase in ('pause','stop'):cpu_text='CPU paused for cooling'
+    elif not allocated:cpu_text='CPU waiting for resources or worker startup'
+    elif not value.get('cpu_hashes',0):cpu_text='CPU starting — no hashes completed yet'
+    else:cpu_text=f"CPU hashing: {allocated} workers · {value.get('cpu_hps',0):,.0f} H/s estimated · {value['cpu_hashes']:,} hashes"
+    if not value.get('gpu_enabled'):gpu_text='GPU off'
+    elif value.get('gpu_phase')=='pause':gpu_text='GPU paused for cooling'
+    elif not value.get('gpu_hashes',0):gpu_text='GPU starting'
+    else:gpu_text=f"GPU hashing · {value.get('gpu_hps',0)/1000000:.2f} MH/s estimated"
+    return cpu_text+'\n'+gpu_text
+
 def memory_worker_limit(existing=0):
     """Reserve host memory; refuse to spawn a process per core blindly."""
     try:
@@ -69,10 +84,53 @@ def cpu_telemetry():
         from gpu_miner import telemetry
         return telemetry()  # Apple's system thermal pressure covers CPU and GPU.
     if sys.platform!='win32':raise RuntimeError('CPU thermal monitoring is unavailable on this platform')
+    # Current LHM releases removed WMI. Prefer the read-only local HTTP API;
+    # never follow redirects, use a proxy, or accept a remote sensor address.
+    try:return cpu_http_telemetry()
+    except (OSError,ValueError,RuntimeError):pass
     # Read an existing provider; never download/install a kernel driver implicitly.
     script=r"""$ErrorActionPreference='Stop'; $s = @(Get-CimInstance -Namespace root\LibreHardwareMonitor -ClassName Sensor | Where-Object { $_.SensorType -eq 'Temperature' -and $_.Identifier -match '^/(intelcpu|amdcpu)/' }); if ($s.Count -eq 0) { throw 'No CPU temperature sensors' }; $s | Select-Object Identifier,Name,Value | ConvertTo-Json -Compress"""
-    result=subprocess.run(['powershell.exe','-NoProfile','-NonInteractive','-Command',script],capture_output=True,text=True,timeout=4,check=True,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
-    rows=json.loads(result.stdout);rows=rows if isinstance(rows,list) else [rows]
+    try:
+        result=subprocess.run(['powershell.exe','-NoProfile','-NonInteractive','-Command',script],capture_output=True,text=True,timeout=3,check=True,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
+        rows=json.loads(result.stdout);rows=rows if isinstance(rows,list) else [rows]
+        return validate_cpu_rows(rows)
+    except (OSError,ValueError,RuntimeError,subprocess.SubprocessError) as error:
+        raise RuntimeError('CPU temperatures unavailable. Open CPU temperature setup in PDCRM and keep the sensor monitor running.') from error
+
+def cpu_http_telemetry():
+    import http.client
+    connection=http.client.HTTPConnection('127.0.0.1',8085,timeout=.75)
+    try:
+        connection.request('GET','/data.json')
+        response=connection.getresponse()
+        if response.status!=200:raise RuntimeError('Local sensor monitor unavailable')
+        data=response.read(1024*1024+1)
+        if len(data)>1024*1024:raise ValueError('Sensor response too large')
+        value=parse_cpu_http(json.loads(data))
+        value['source']='LibreHardwareMonitor local HTTP';return value
+    finally:connection.close()
+
+def parse_cpu_http(tree):
+    import re
+    rows=[];pending=[tree];visited=0
+    while pending:
+        node=pending.pop();visited+=1
+        if visited>12000 or not isinstance(node,dict):raise ValueError('Invalid sensor tree')
+        children=node.get('Children',[])
+        if not isinstance(children,list):raise ValueError('Invalid sensor children')
+        pending.extend(children)
+        identifier=node.get('SensorId','')
+        if not isinstance(identifier,str) or not re.match(r'^/(intelcpu|amdcpu)/.*/temperature/',identifier,re.I):continue
+        if node.get('Type','Temperature')!='Temperature':continue
+        raw=node.get('RawValue')
+        if raw is None:
+            # Older monitor builds have formatted values only. Never mistake
+            # Fahrenheit, a fan speed, or thermal headroom for Celsius.
+            match=re.fullmatch(r'\s*(-?\d+(?:[.,]\d+)?)\s*°C\s*',str(node.get('Value','')))
+            if match:raw=float(match.group(1).replace(',','.'))
+        if raw is not None:
+            if type(raw) not in (int,float):raise ValueError('Invalid raw temperature')
+            rows.append({'Identifier':identifier,'Name':node.get('Text',''),'Value':raw})
     return validate_cpu_rows(rows)
 
 def validate_cpu_rows(rows):
@@ -154,6 +212,7 @@ class DynamicSearch:
         self.shutdown=threading.Event();self.gate=threading.Event()
         self.cpu_enabled=False;self.cpu_state={'phase':'sensor_unavailable'};self.fault=None;self.cpu_hot=False
         self.cpu_hashes=0;self.gpu_hashes=0;self.checked=0
+        self.rate_checked=time.monotonic();self.rate_cpu=0;self.rate_gpu=0;self.rates={'cpu_hps':0,'gpu_hps':0}
         self.monitor=threading.Thread(target=self._monitor,name='PDCRM-thermal',daemon=True);self.monitor.start()
 
     def _monitor(self):
@@ -208,9 +267,14 @@ class DynamicSearch:
             self.gpu_hashes=getattr(self.gpu,'total_hashes',0)
             # CPU load cannot continue while a monitored GPU is over its limits.
             if self.gpu.paused:self.gate.clear()
+        now=time.monotonic();elapsed=now-self.rate_checked
+        if elapsed>=2:
+            self.rates={'cpu_hps':max(0,(self.cpu_hashes-self.rate_cpu)/elapsed),'gpu_hps':max(0,(self.gpu_hashes-self.rate_gpu)/elapsed)}
+            self.rate_checked=now;self.rate_cpu=self.cpu_hashes;self.rate_gpu=self.gpu_hashes
         write_status(self.profile/'pdcrm-status.json',{'updated_at':time.time(),'cpu':self.cpu_state,
             'cpu_workers_requested':value['cpu_workers'],'cpu_workers_allocated':self.count,'cpu_duty':value['cpu_duty'],'gpu_duty':value['gpu_duty'],
             'cpu_hashes':self.cpu_hashes,'gpu_hashes':self.gpu_hashes,'gpu_enabled':self.gpu is not None,
+            'gpu_phase':('pause' if self.gpu.paused or self.cpu_hot else 'mine') if self.gpu else 'disabled',**self.rates,
             'limits':{'cpu_pause_c':80,'cpu_resume_c':70,'cpu_stop_c':85,'gpu_pause_c':68,'gpu_resume_c':66,'gpu_stop_c':75},
             'policy':'Conservative limits; no inferred manufacturer rating. Sensor faults pause or stop mining.'})
         for nonce in results:

@@ -26,7 +26,7 @@ commit=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
 manifest.pop('package_sha256',None)
 manifest.update(windows_node_file='node/pawquanta-node',windows_node_sha256=hashlib.sha256((node/'pawquanta-node').read_bytes()).hexdigest(),
     source_commit=commit,desktop_source_commit=commit,build_run=os.environ.get('GITHUB_RUN_ID'),
-    platform='macos-apple-silicon',release_url='https://github.com/Pierce1274/pawquanta/releases/tag/mainnet-v0.5.0',wallet_version='0.5.0')
+    platform='macos-apple-silicon',release_url='https://github.com/Pierce1274/pawquanta/releases/tag/mainnet-v0.5.1',wallet_version='0.5.1')
 (package/'core-release.json').write_text(json.dumps(manifest,indent=2)+'\n')
 # Bundle non-system Homebrew dependencies and rewrite Mach-O paths. Do this
 # before ad-hoc signing; no dependency on the build machine's /opt/homebrew.

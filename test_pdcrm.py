@@ -10,6 +10,23 @@ from unittest.mock import patch
 import pdcrm
 
 class ResourceTests(unittest.TestCase):
+    def test_current_http_sensor_format_and_invalid_values(self):
+        tree={'Children':[{'Text':'CPU Package','SensorId':'/intelcpu/0/temperature/0','Type':'Temperature','RawValue':63.25},
+            {'Text':'CPU Core Distance to TjMax','SensorId':'/intelcpu/0/temperature/1','Type':'Temperature','RawValue':99},
+            {'Text':'GPU Core','SensorId':'/nvidiagpu/0/temperature/0','Type':'Temperature','RawValue':100}]}
+        self.assertEqual(pdcrm.parse_cpu_http(tree)['temperature_c'],63.25)
+        tree['Children'][0]['RawValue']=float('nan')
+        with self.assertRaises(RuntimeError):pdcrm.parse_cpu_http(tree)
+        tree={'Children':[{'Text':'CPU Package','SensorId':'/intelcpu/0/temperature/0','Value':'140 °F'}]}
+        with self.assertRaises(RuntimeError):pdcrm.parse_cpu_http(tree)
+        tree['Children'][0]['Value']='60.0 °C'
+        self.assertEqual(pdcrm.parse_cpu_http(tree)['temperature_c'],60)
+
+    def test_status_does_not_claim_hashing_without_sensors_or_workers(self):
+        state={'cpu':{'phase':'sensor_unavailable'},'cpu_workers_requested':6,'cpu_workers_allocated':0,'cpu_hashes':0,'gpu_enabled':False}
+        self.assertIn('CPU NOT HASHING',pdcrm.status_text(state))
+        state.update(cpu={'phase':'mine'},cpu_workers_allocated=6,cpu_hashes=5000,cpu_hps=1000)
+        self.assertIn('CPU hashing: 6 workers',pdcrm.status_text(state))
     def test_thermal_headroom_is_not_a_cpu_temperature(self):
         distance={'Identifier':'/intelcpu/0/temperature/0','Name':'CPU Core #1 Distance to TjMax','Value':15}
         with self.assertRaises(RuntimeError):pdcrm.validate_cpu_rows([distance])

@@ -168,7 +168,7 @@ class CoreRuntime:
         network = self.rpc('getnetworkinfo')
         balances = self.wallet('getbalances')['mine'] if self.wallet else {}
         return {'height': chain['blocks'], 'headers': chain['headers'],
-                'synchronizing': chain['initialblockdownload'], 'peers': network['connections'],
+                'synchronizing': chain['initialblockdownload'] or chain['blocks']<chain['headers'], 'peers': network['connections'],
                 'spendable': str(balances.get('trusted', 0)),
                 'maturing': str(balances.get('immature', 0)), 'tip': chain['bestblockhash']}
 

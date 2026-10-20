@@ -256,6 +256,9 @@ def _mine(config, stop_file, development=False, owner_limit_enforced=True, gpu=N
     ledger = RewardLedger(config['ledger_file'], config['genesis'], script)
     print('Miner configured: '+('guarded GPU' if gpu else 'one CPU worker')+'; cap includes immature rewards and fees.', flush=True)
     while not stop_file.exists():
+        synchronization=rpc('getblockchaininfo')
+        if not development and (synchronization.get('initialblockdownload') or synchronization.get('blocks',0)<synchronization.get('headers',0)):
+            time.sleep(.5);continue
         if time.time() < config['not_before_utc_epoch']:
             time.sleep(min(1, config['not_before_utc_epoch'] - time.time()))
             continue
