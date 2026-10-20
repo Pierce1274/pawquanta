@@ -17,9 +17,9 @@ class ResourceTests(unittest.TestCase):
         self.assertEqual(pdcrm.parse_cpu_http(tree)['temperature_c'],63.25)
         tree['Children'][0]['RawValue']=float('nan')
         with self.assertRaises(RuntimeError):pdcrm.parse_cpu_http(tree)
-        tree={'Children':[{'Text':'CPU Package','SensorId':'/intelcpu/0/temperature/0','Value':'140 Â°F'}]}
+        tree={'Children':[{'Text':'CPU Package','SensorId':'/intelcpu/0/temperature/0','Value':'140 °F'}]}
         with self.assertRaises(RuntimeError):pdcrm.parse_cpu_http(tree)
-        tree['Children'][0]['Value']='60.0 Â°C'
+        tree['Children'][0]['Value']='60.0 °C'
         self.assertEqual(pdcrm.parse_cpu_http(tree)['temperature_c'],60)
 
     def test_status_does_not_claim_hashing_without_sensors_or_workers(self):

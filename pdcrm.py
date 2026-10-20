@@ -22,15 +22,15 @@ def status_text(value):
     cpu=value.get('cpu',{});phase=cpu.get('phase');requested=value.get('cpu_workers_requested',0)
     allocated=value.get('cpu_workers_allocated',0)
     if not requested:cpu_text='CPU off'
-    elif phase=='sensor_unavailable':cpu_text='CPU NOT HASHING: temperature readings missing â€” open CPU temperature setup'
+    elif phase=='sensor_unavailable':cpu_text='CPU NOT HASHING: temperature readings missing — open CPU temperature setup'
     elif phase in ('pause','stop'):cpu_text='CPU paused for cooling'
     elif not allocated:cpu_text='CPU waiting for resources or worker startup'
-    elif not value.get('cpu_hashes',0):cpu_text='CPU starting â€” no hashes completed yet'
-    else:cpu_text=f"CPU hashing: {allocated} workers Â· {value.get('cpu_hps',0):,.0f} H/s estimated Â· {value['cpu_hashes']:,} hashes"
+    elif not value.get('cpu_hashes',0):cpu_text='CPU starting — no hashes completed yet'
+    else:cpu_text=f"CPU hashing: {allocated} workers · {value.get('cpu_hps',0):,.0f} H/s estimated · {value['cpu_hashes']:,} hashes"
     if not value.get('gpu_enabled'):gpu_text='GPU off'
     elif value.get('gpu_phase')=='pause':gpu_text='GPU paused for cooling'
     elif not value.get('gpu_hashes',0):gpu_text='GPU starting'
-    else:gpu_text=f"GPU hashing Â· {value.get('gpu_hps',0)/1000000:.2f} MH/s estimated"
+    else:gpu_text=f"GPU hashing · {value.get('gpu_hps',0)/1000000:.2f} MH/s estimated"
     if phase=='manual':cpu_text+=' · MANUAL: CPU temperature protection unavailable'
     return cpu_text+'\n'+gpu_text
 
@@ -129,7 +129,7 @@ def parse_cpu_http(tree):
         if raw is None:
             # Older monitor builds have formatted values only. Never mistake
             # Fahrenheit, a fan speed, or thermal headroom for Celsius.
-            match=re.fullmatch(r'\s*(-?\d+(?:[.,]\d+)?)\s*Â°C\s*',str(node.get('Value','')))
+            match=re.fullmatch(r'\s*(-?\d+(?:[.,]\d+)?)\s*°C\s*',str(node.get('Value','')))
             if match:raw=float(match.group(1).replace(',','.'))
         if raw is not None:
             if type(raw) not in (int,float):raise ValueError('Invalid raw temperature')
