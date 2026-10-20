@@ -17,7 +17,7 @@ jobs:
       - name: Dependencies
         run: |
           brew install cmake ninja boost libevent sqlite
-          python -m pip install pyinstaller tuf==7.0.1 cryptography==50.0.2
+          python -m pip install pyinstaller tuf==7.0.1 cryptography==50.0.2 qrcode==8.2
           python build-tools/pin-boost.py
       - name: Compile Metal helper and shader without requiring a GPU
         run: python build-tools/build-metal.py metal-preflight/Pawquanta-Metal
@@ -41,7 +41,7 @@ jobs:
             build/bin/bitcoin-cli
           key: macos-arm64-native-v1-${{ hashFiles('core/**') }}
       - name: Accounting and safety tests
-        run: python -m unittest test_gpu_miner test_core_miner test_core_runtime test_core_wallet test_wallet_updates test_chain_guard test_pdcrm test_mining_schedule -v
+        run: python -m unittest test_gpu_miner test_core_miner test_core_runtime test_core_wallet test_wallet_updates test_chain_guard test_pdcrm test_mining_schedule test_wallet_v1 -v
       - name: Compile Metal and package Apple Silicon GUI
         run: python build-tools/package-macos.py
       - name: Verify updater can extract the actual package
@@ -59,9 +59,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - run: python -m pip install pyinstaller pyopencl==2026.1.4 tuf==7.0.1 cryptography==50.0.2
+      - run: python -m pip install pyinstaller pyopencl==2026.1.4 tuf==7.0.1 cryptography==50.0.2 qrcode==8.2
       - name: Update, reorg, wallet and mining tests
-        run: python -m unittest test_wallet_updates test_chain_guard test_core_wallet test_core_miner test_core_runtime test_gpu_miner -v
+        run: python -m unittest test_wallet_updates test_chain_guard test_core_wallet test_core_miner test_core_runtime test_gpu_miner test_wallet_v1 -v
       - name: Package and verify the Windows wallet
         run: python build-tools/package-windows.py
       - name: Verify updater can extract the actual package

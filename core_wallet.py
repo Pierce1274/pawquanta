@@ -28,13 +28,17 @@ class WalletApp:
         self.connection_worker=None
         self.closing=False
         self.profile=PROFILE;self.stop_file=self.profile/'STOP-MINING'
+        if not UPDATES_TEST_MODE:
+            from wallet_v1 import prepare_profile
+            prepare_profile(self.profile)
         self.guard=None;self.update_ready=None;self.sending=False;self.updates=None;self.resume_after_update=False
-        window.title('Pawquanta '+VERSION+' — Wallet & Miner');window.geometry('820x740');window.minsize(780,700)
+        window.title('Pawquanta '+VERSION+' — Wallet & Miner');window.geometry('1000x900');window.minsize(880,700)
         style=ttk.Style();style.theme_use('clam')
         style.configure('TFrame',background='#111820');style.configure('TLabel',background='#111820',foreground='#edf1f4',font=('Segoe UI',11))
         style.configure('Title.TLabel',font=('Segoe UI',26,'bold'));style.configure('Balance.TLabel',font=('Segoe UI',20,'bold'))
         style.configure('TButton',font=('Segoe UI',11),padding=9)
-        frame=ttk.Frame(window,padding=24);frame.pack(fill='both',expand=True)
+        from wallet_v1_ui import build_shell
+        frame=build_shell(self)
         ttk.Label(frame,text='PAWQUANTA',style='Title.TLabel').pack(anchor='w')
         ttk.Label(frame,text='Your wallet. Your miner. A separate, experimental public blockchain.').pack(anchor='w',pady=(4,20))
         self.balance=tk.StringVar(value='Spendable: — PQUA');self.maturing=tk.StringVar(value='Maturing: — PQUA')
@@ -52,6 +56,8 @@ class WalletApp:
         ttk.Button(frame,text='PDCRM — CPU + GPU resources',command=self.resource_settings).pack(anchor='w',pady=4)
         self.compute_status=tk.StringVar(value='PDCRM: CPU requires verified temperature telemetry; GPU uses its watchdog.')
         ttk.Label(frame,textvariable=self.compute_status,wraplength=720).pack(anchor='w',pady=3)
+        ttk.Label(frame,textvariable=self.telemetry,wraplength=750).pack(anchor='w',pady=5)
+        ttk.Label(frame,textvariable=self.session_info,wraplength=750).pack(anchor='w',pady=5)
         bootstrap=BASE/'update-root.json'
         if bootstrap.exists() and not UPDATES_TEST_MODE:self.updates=WalletUpdates(UPDATE_STORE,bootstrap.read_bytes(),self.progress)
         self.auto_update=tk.BooleanVar(value=self.updates.enabled() if self.updates else False)
@@ -72,8 +78,17 @@ class WalletApp:
         if not self.runtime or not self.address:
             messagebox.showinfo('PDCRM','Connect your wallet before changing resource settings.');return
         import os
-        panel=tk.Toplevel(self.window);panel.title('PDCRM — compute resources');panel.geometry('650x560')
+        panel=tk.Toplevel(self.window);panel.title('PDCRM — compute resources');panel.geometry('720x760')
         frame=ttk.Frame(panel,padding=20);frame.pack(fill='both',expand=True)
+        def preset(name):
+            import os
+            from wallet_v1 import mining_profile
+            save_compute_settings(self.profile,mining_profile(name,os.cpu_count() or 1))
+            panel.destroy();self.resource_settings()
+        presets=ttk.Frame(panel,padding=10);presets.pack(fill='x')
+        ttk.Label(presets,text='Profiles (GPU enable remains a separate control)').pack(side='left')
+        for name in ('Quiet','Balanced'):
+            ttk.Button(presets,text=name,command=lambda n=name:preset(n)).pack(side='left',padx=5)
         value=compute_settings(self.profile)
         cpu=tk.IntVar(value=value['cpu_workers']);cpu_duty=tk.IntVar(value=round(value['cpu_duty']*100));gpu_duty=tk.IntVar(value=round(value['gpu_duty']*100))
         ttk.Label(frame,text='Pawquanta Dynamic Compute Resource Manager',font=('Segoe UI',14,'bold')).pack(anchor='w')
@@ -153,7 +168,7 @@ class WalletApp:
                 self.tor=TorClient(self.profile/'transport',self.progress)
                 self.runtime=CoreRuntime(self.profile,BASE/self.manifest['windows_node_file'],
                     self.manifest['windows_node_sha256'],seed=seed,socks_port=self.tor.port,status=self.progress)
-                self.tor.start();self.runtime.start();self.address=self.runtime.open_wallet()
+                self.tor.start();self.runtime.start();self.address=self.runtime.open_wallet(json.loads((self.profile/'restored-wallet.json').read_text())['walletname']) if (self.profile/'restored-wallet.json').exists() else self.runtime.open_wallet()
                 self.guard=ChainGuard(self.profile/'chain-monitor.json')
                 self.events.put(('connected',None))
                 while not self.closing and self.runtime and self.runtime.process.poll() is None:
@@ -186,6 +201,8 @@ class WalletApp:
             if not amount.is_finite() or units!=units.to_integral_value() or not 0<units<=42_000_000*UNIT:raise ValueError()
         except (DecimalException,ValueError):messagebox.showerror('Mining limit','Enter a positive amount, with at most eight decimal places.');return
         if not resume:
+            from mining_plan import cancel as cancel_plan
+            cancel_plan(self.profile)
             from mining_schedule import cancel
             cancel(self.profile)
         if self.stop_file.exists():self.stop_file.unlink()
@@ -203,45 +220,26 @@ class WalletApp:
         self.worker=threading.Thread(target=work,daemon=True);self.worker.start()
 
     def stop_mining(self,cancel_schedule=True):
-        if cancel_schedule:
-            from mining_schedule import cancel
-            cancel(self.profile)
         if self.profile.exists():self.stop_file.touch()
+        self.resume_when_synced=False
+        if cancel_schedule:
+            from mining_plan import cancel as cancel_plan
+            from mining_schedule import cancel as cancel_pause
+            for cancel in (cancel_plan,cancel_pause):
+                try:cancel(self.profile)
+                except (OSError,ValueError,KeyError):pass
         self.status.set('Stopping mining…')
 
     def receive(self):
-        if not self.address:messagebox.showinfo('Receive','Connect first to create or load your encrypted wallet.');return
-        self.window.clipboard_clear();self.window.clipboard_append(self.address)
-        messagebox.showinfo('Address copied',self.address+'\n\nOnly send Pawquanta on this network to this address.')
+        from wallet_v1_ui import receive
+        receive(self)
 
     def send(self):
-        if not self.runtime or not self.address:return
-        if self.sending:return
-        self.sending=True
-        recipient=simpledialog.askstring('Send PQUA','Receiving Pawquanta address:',parent=self.window)
-        if not recipient:self.sending=False;return
-        raw=simpledialog.askstring('Send PQUA','Amount in PQUA:',parent=self.window)
-        if raw is None:self.sending=False;return
-        try:
-            amount=Decimal(raw)
-            if not amount.is_finite() or not 0<amount<=42_000_000 or amount*UNIT!=(amount*UNIT).to_integral_value():raise ValueError()
-        except (ValueError,DecimalException):self.sending=False;messagebox.showerror('Amount','Enter a positive amount with at most eight decimal places.');return
-        if not messagebox.askyesno('Confirm transfer',f'Send {amount} PQUA to\n{recipient}\nplus the network fee?'):self.sending=False;return
-        def work():
-            try:
-                self.sending=True
-                if not self.guard:raise RuntimeError('Chain monitor not ready; payments paused')
-                self.guard.require_payments(self.runtime.rpc)
-                password=(self.profile/'wallet-recovery-password.txt').read_text().strip()
-                self.runtime.wallet('walletpassphrase',password,30)
-                try:
-                    result=self.runtime.wallet('send',{recipient:format(amount,'f')},None,'unset',None,{'minconf':12,'include_unsafe':False})
-                    transaction=result['txid']
-                finally:self.runtime.wallet('walletlock')
-                self.progress('Transfer submitted: '+transaction)
-            except Exception as error:self.events.put(('error',str(error)))
-            finally:self.sending=False
-        threading.Thread(target=work,daemon=True).start()
+        from wallet_v1_ui import send
+        send(self)
+
+    def manifest_path(self):
+        return BASE/self.manifest['windows_node_file']
 
     def backup_folder(self):
         if not self.profile.exists():return
@@ -254,6 +252,7 @@ class WalletApp:
 
     def poll(self):
         if not self.closing:
+            self.poll_v1()
             try:
                 from mining_schedule import read as read_schedule,update as update_schedule
                 schedule=read_schedule(self.profile)
@@ -277,7 +276,12 @@ class WalletApp:
         except (OSError,ValueError,KeyError,AttributeError):pass
         while not self.events.empty():
             kind,value=self.events.get()
-            if kind=='status':self.status.set(value)
+            if kind=='ui_task':
+                callback,result,failure=value
+                if not self.closing:
+                    try:callback(result,failure)
+                    except Exception as error:self.status.set('Tool action needs attention: '+str(error))
+            elif kind=='status':self.status.set(value)
             elif kind=='sensor_check':
                 panel,result,message=value
                 if panel.winfo_exists():result.set(message)
@@ -290,6 +294,7 @@ class WalletApp:
                 self.window.after(30000,self.apply_update)
             elif kind=='connected':self.mine_button.configure(state='normal');self.status.set('Encrypted wallet connected. You can receive, send or mine.')
             elif kind=='snapshot':
+                self.last_snapshot=value
                 self.balance.set('Spendable: '+format(Decimal(value['spendable']),',.8f')+' PQUA');self.maturing.set('Maturing: '+format(Decimal(value['maturing']),',.8f')+' PQUA')
                 self.network.set(f"Block {value['height']:,} of {value.get('headers',value['height']):,} · {value['peers']} peer connections"+(' · Syncing…' if value['synchronizing'] else ''))
                 self.mine_button.configure(state='normal' if value['peers']>0 and not value['synchronizing'] else 'disabled')
@@ -301,6 +306,9 @@ class WalletApp:
             elif kind=='error':self.status.set(value);messagebox.showerror('Pawquanta',value)
             elif kind=='connect_error':self.connect_button.configure(state='normal');self.status.set(value);messagebox.showerror('Connection',value)
             elif kind=='closed':
+                if getattr(self,'pending_restore',None):
+                    launch_updated(Path(sys.executable),self.pending_restore,UPDATE_STORE,resume_connection=True,resume_mining=False)
+                    self.window.destroy();return
                 if self.update_ready and self.updates and self.auto_update.get():
                     try:
                         executable=self.updates.install()
@@ -313,7 +321,39 @@ class WalletApp:
                 self.window.destroy();return
         self.window.after(200,self.poll)
 
+    def poll_v1(self):
+        from mining_plan import read as read_plan,phase,state
+        try:
+            plan=read_plan(self.profile);mode=phase(plan)
+            if mode=='waiting':
+                self.session_info.set('Scheduled start: '+time.strftime('%Y-%m-%d %H:%M',time.localtime(plan['start']))+' local; keep wallet open and computer awake.')
+                self.resume_when_synced=False
+                if self.worker and self.worker.is_alive():self.stop_file.touch()
+            elif mode=='active':
+                self.session_info.set('Scheduled stop: '+time.strftime('%Y-%m-%d %H:%M',time.localtime(plan['end']))+' local.')
+                if getattr(self,'plan_started',None)!=plan['start'] and not (self.worker and self.worker.is_alive()):
+                    self.plan_started=plan['start'];self.resume_when_synced=True
+                    if not self.runtime and not (self.connection_worker and self.connection_worker.is_alive()):self.connect()
+            elif mode=='ended':
+                self.resume_when_synced=False;state(self.profile,plan,'completed');self.stop_mining(cancel_schedule=False);self.session_info.set('Scheduled mining session completed. No automatic restart is armed.')
+            else:self.session_info.set('Last scheduled session completed. Manual mining remains available.' if plan and plan['state']=='completed' else 'No active mining session schedule. Manual Start/Stop controls are available.')
+        except Exception as error:self.session_info.set('Mining plan needs attention: '+str(error));self.resume_when_synced=False;self.stop_file.touch() if self.profile.exists() else None
+        try:
+            sample=json.loads((self.profile/'pdcrm-status.json').read_text());fresh=time.time()-sample['updated_at']<10
+            if fresh and self.worker and self.worker.is_alive():
+                text=f"CPU {sample.get('cpu_hps',0):,.0f} H/s · GPU {sample.get('gpu_hps',0)/1e6:.2f} MH/s · CPU workers {sample.get('cpu_workers_allocated',0)}/{sample.get('cpu_workers_requested',0)}"
+                cpu=sample.get('cpu',{});text+=' · CPU '+(str(cpu['temperature_c'])+' °C' if 'temperature_c' in cpu else cpu.get('phase','unknown'))
+                gpu_file=self.profile/'gpu-status.json'
+                if gpu_file.exists():
+                    gpu=json.loads(gpu_file.read_text())
+                    if time.time()-gpu.get('updated_at',0)<10:text+=' · GPU '+str(gpu.get('temperature_c','unknown'))+' °C'
+                self.telemetry.set(text)
+            else:self.telemetry.set('No fresh active hashing sample. Stopped or stale data is not reported as live performance.')
+        except (OSError,ValueError,KeyError):self.telemetry.set('Live compute data unavailable; check PDCRM and Connection doctor.')
+
     def close(self):
+        if getattr(self,'sending',False):
+            self.status.set('Finish the current wallet transaction before closing.');return
         self.closing=True
         self.stop_mining(cancel_schedule=False);self.status.set('Safely closing your wallet and network connection…')
         def work():
@@ -382,8 +422,27 @@ def self_test(directory,manifest):
         assert runtime.stop()
         runtime.start();assert runtime.open_wallet()==address
         assert runtime.wallet('getwalletinfo')['unlocked_until']==0
+        # 1.0: exact-fee send and encrypted backup recovery on separate private nodes.
+        from wallet_v1 import prepare_send,confirm_send,make_backup,read_backup,restore_backup
+        quote=prepare_send(runtime,guard,receiver,'1.25000001')
+        reviewed_tx=confirm_send(runtime,guard,runtime.directory,quote)
+        assert len(reviewed_tx)==64
+        runtime.wallet('generatetoaddress',1,address)
+        import uuid
+        bundle=runtime.directory/('verified-backup-'+uuid.uuid4().hex+'.pquabackup')
+        test_passphrase='private-chain-test-only-backup-passphrase'
+        make_backup(runtime,runtime.directory,test_passphrase,bundle)
+        body=read_backup(bundle,test_passphrase,genesis=runtime.genesis)
+        restored_profile=restore_backup(body,runtime.directory/('recovery-check-'+uuid.uuid4().hex),development=True)
+        recovered=CoreRuntime(restored_profile,BASE/manifest['windows_node_file'],manifest['windows_node_sha256'],genesis=runtime.genesis,development=True)
+        try:
+            recovered.start();assert recovered.open_wallet()==address
+            recovered.wallet('walletpassphrase',password,5);recovered.wallet('walletlock')
+            assert recovered.wallet('getwalletinfo')['unlocked_until']==0
+        finally:recovered.stop()
         result={'passed':True,'scope':'desktop_wallet_private_payment_and_restart',
             'packaged_executable':bool(getattr(sys,'frozen',False)),
+            'v1_exact_fee_send_and_cold_encrypted_recovery':True,
             'encrypted_wallet':True,'wallet_locked':True,'backup_exists':(runtime.directory/'wallet-encrypted-backup.dat').is_file(),
             'one_atomic_unit_coinbase':True,'decimal_transfer_confirmed':True,'restart_persistence':True,
             'real_reorg_alarm_persisted':True,'minimum_12_confirmation_send':True,
@@ -428,6 +487,10 @@ if __name__=='__main__':
         self_test(arguments.self_test_data,manifest);raise SystemExit()
     from wallet_splash import enable_native_pixels
     enable_native_pixels()
+    if not arguments.ui_smoke:
+        from wallet_v1 import atomic_json
+        UPDATE_STORE.mkdir(parents=True,exist_ok=True)
+        atomic_json(UPDATE_STORE/'startup-health.json',{'version':VERSION,'state':'starting','time':time.time()})
     window=tk.Tk();window.withdraw();app=WalletApp(window,manifest)
     app.resume_when_synced=arguments.resume_mining
     if arguments.resume_connection:window.after(100,app.connect)
@@ -437,5 +500,11 @@ if __name__=='__main__':
         window.after(500,window.destroy)
     else:
         from wallet_splash import show_splash
-        splash=show_splash(window,VERSION)
+        from wallet_v1 import preferences
+        if preferences(PROFILE)['reduced_motion']:window.deiconify()
+        else:splash=show_splash(window,VERSION)
+    if not arguments.ui_smoke:
+        from wallet_v1 import atomic_json
+        UPDATE_STORE.mkdir(parents=True,exist_ok=True)
+        window.after_idle(lambda:atomic_json(UPDATE_STORE/'startup-health.json',{'version':VERSION,'state':'dashboard-ready','time':time.time()}))
     window.mainloop()

@@ -19,13 +19,13 @@ with zipfile.ZipFile(archive) as bundle:
         (package/'node'/name).write_bytes(bundle.read('Pawquanta-Wallet/node/'+name))
 manifest=json.loads((root/'core-release.json').read_text())
 commit=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
-manifest.update(windows_node_file='node/Pawquanta-node.exe',desktop_source_commit=commit,release_url='https://github.com/Pierce1274/pawquanta/releases/tag/mainnet-v0.5.2',wallet_version='0.5.2')
+manifest.update(windows_node_file='node/Pawquanta-node.exe',desktop_source_commit=commit,release_url='https://github.com/Pierce1274/pawquanta/releases/tag/mainnet-v1.0.0',wallet_version='1.0.0')
 assert hashlib.sha256((package/'node/Pawquanta-node.exe').read_bytes()).hexdigest()==manifest['windows_node_sha256']
 (package/'core-release.json').write_text(json.dumps(manifest,indent=2)+'\n')
-for source,destination in [('update-root.json','update-root.json'),('core/COPYING','CORE-LICENSE.txt'),('GPU-MINING.md','GPU-MINING.md'),('UPDATES-AND-SECURITY.md','UPDATES-AND-SECURITY.md')]:shutil.copy2(root/source,package/destination)
+for source,destination in [('LICENSE','APP-LICENSE.txt'),('RELEASE-1.0.md','RELEASE-1.0.md'),('update-root.json','update-root.json'),('core/COPYING','CORE-LICENSE.txt'),('GPU-MINING.md','GPU-MINING.md'),('UPDATES-AND-SECURITY.md','UPDATES-AND-SECURITY.md')]:shutil.copy2(root/source,package/destination)
 check=root/'windows-wallet-selftest'
 subprocess.run([str(package/'Pawquanta-Wallet.exe'),'--self-test','--self-test-data',str(check)],check=True,timeout=300)
 result=json.loads((check/'self-test-result.json').read_text())
-assert result['passed'] and result['real_reorg_alarm_persisted'] and result['minimum_12_confirmation_send'] and result['pdcrm_spawned_cpu_native_block_and_exact_quota']
-subprocess.run([str(package/'Pawquanta-Wallet.exe'),'--ui-smoke'],check=True,timeout=30)
+assert result['passed'] and result['real_reorg_alarm_persisted'] and result['minimum_12_confirmation_send'] and result['pdcrm_spawned_cpu_native_block_and_exact_quota'] and result['v1_exact_fee_send_and_cold_encrypted_recovery']
+subprocess.run([str(package/'Pawquanta-Wallet.exe'),'--ui-smoke'],check=True,timeout=90)
 shutil.make_archive(str(root/'Pawquanta-Wallet-Windows-x64'),'zip',root/'dist','Pawquanta-Wallet')

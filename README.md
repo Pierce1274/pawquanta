@@ -1,10 +1,20 @@
 # Pawquanta / PQUA
 
+## Pawquanta 1.0 wallet workspace
+
+Version 1.0 adds a unified dashboard, Connection Doctor, Quiet/Balanced mining profiles, one-session mining schedules, exact-fee send review, receiving-address QR codes, a local address book, searchable paginated history with CSV export, a local block/wallet-transaction explorer, encrypted backup bundles, separate-folder recovery, installation health checks, themes, text scaling and reduced-motion startup.
+
+Mining schedules require the wallet open and the computer awake. Missed sessions do not mine retroactively. CSV export covers loaded history pages. The explorer reads your own node and does not send searches to an external website.
+
+Backup bundles encrypt the native wallet backup, recovery password, receiving address, saved preferences and available mining reward ledger. Keep the bundle and its passphrase separately. Restoring requires a new folder and starts with mining stopped. Integrity authentication is distinct from native-wallet recovery verification.
+
+There is no marketplace, exchange, escrow, fiat conversion or platform custody in this release. Network consensus, genesis, balances and reward rules are unchanged. Pawquanta remains experimental and vulnerable to majority-hash attacks; release 1.0 is not an independent security audit.
+
 Independent, experimental public blockchain software. The release page states deployment status; a countdown or repository alone does not certify a launched network.
 
 ## Wallet and miner downloads
 
-1. Open [the mainnet release](https://github.com/Pierce1274/pawquanta/releases/tag/mainnet-v0.5.2) and choose the Windows or Apple Silicon Mac package.
+1. Open [the mainnet release](https://github.com/Pierce1274/pawquanta/releases/tag/mainnet-v1.0.0) and choose the Windows or Apple Silicon Mac package.
 2. Extract the entire ZIP into a folder you can write to. Open **Pawquanta-Wallet.exe** on Windows or **Pawquanta-Wallet.app** on Mac.
 3. Click **Connect**. The verified network connection downloads automatically. No Python installation or terminal commands are needed.
 4. Use **Receive / copy address**, **Send coins**, **Start mining**, or **Stop mining**.

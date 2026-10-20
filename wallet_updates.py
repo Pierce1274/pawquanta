@@ -13,8 +13,8 @@ import uuid
 import unicodedata
 from tuf.ngclient import Updater
 
-VERSION='0.5.2'
-SERIAL=52
+VERSION='1.0.0'
+SERIAL=100
 METADATA_URL='https://raw.githubusercontent.com/Pierce1274/pawquanta/wallet-updates/metadata/'
 TARGET_URL='https://github.com/Pierce1274/pawquanta/releases/download/'
 CHANNEL_URL='https://raw.githubusercontent.com/Pierce1274/pawquanta/wallet-updates/targets/'
