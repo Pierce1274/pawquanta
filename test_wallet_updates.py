@@ -34,7 +34,7 @@ class UpdatesTests(unittest.TestCase):
             root=Path(folder);approval.ROOT=root;approval.PRIVATE=root/'private';approval.FEED=root/'feed';approval.initialize()
             binary=root/'Pawquanta-Wallet-Windows-x64.zip'
             from core_runtime import MAIN_GENESIS
-            manifest=json.dumps({'wallet_version':'0.5.2','genesis':MAIN_GENESIS})
+            manifest=json.dumps({'wallet_version':'0.5.3','genesis':MAIN_GENESIS})
             with zipfile.ZipFile(binary,'w') as bundle:
                 bundle.writestr('Pawquanta-Wallet/Pawquanta-Wallet.exe',b'benign fixture; never executed')
                 bundle.writestr('Pawquanta-Wallet/core-release.json',manifest)
@@ -44,8 +44,8 @@ class UpdatesTests(unittest.TestCase):
                 bundle.writestr('Pawquanta-Wallet.app/Contents/Resources/core-release.json',manifest)
                 bundle.writestr('Pawquanta-Wallet.app/Contents/Resources/update-root.json',(root/'update-root.json').read_bytes())
             password=(approval.PRIVATE/'approval-password.txt').read_bytes().strip()
-            approval.approve('0.5.2',52,binary,mac,password)
-            package=approval.FEED/'packages/mainnet-v0.5.2';package.mkdir(parents=True)
+            approval.approve('0.5.3',53,binary,mac,password)
+            package=approval.FEED/'packages/mainnet-v0.5.3';package.mkdir(parents=True)
             (package/binary.name).write_bytes(binary.read_bytes())
             import functools
             class Handler(http.server.SimpleHTTPRequestHandler):
@@ -55,7 +55,7 @@ class UpdatesTests(unittest.TestCase):
             try:
                 with patch('wallet_updates.METADATA_URL',base+'metadata/'),patch('wallet_updates.TARGET_URL',base+'packages/'),patch('wallet_updates.CHANNEL_URL',base+'targets/'),patch('wallet_updates.platform_name',return_value='windows-x64'):
                     client=WalletUpdates(root/'client',(root/'update-root.json').read_bytes())
-                    self.assertEqual(client.check()['version'],'0.5.2')
+                    self.assertEqual(client.check()['version'],'0.5.3')
                     archive=client.store/'approved-update.zip';valid=archive.read_bytes();archive.write_bytes(valid+b'tamper')
                     with self.assertRaises(Exception):client.install()
                     archive.write_bytes(valid);exe=client.install();self.assertTrue(exe.is_file())
@@ -72,7 +72,7 @@ class UpdatesTests(unittest.TestCase):
                     with self.assertRaises(Exception):client.client().refresh()
                     approval.renew()
                     # Corrupt signed targets metadata: a clean client must refuse it.
-                    targets=approval.FEED/'metadata/targets.json';original=targets.read_bytes();targets.write_bytes(original.replace(b'0.5.2',b'0.5.9'))
+                    targets=approval.FEED/'metadata/targets.json';original=targets.read_bytes();targets.write_bytes(original.replace(b'0.5.3',b'0.5.9'))
                     other=WalletUpdates(root/'other',(root/'update-root.json').read_bytes())
                     with self.assertRaises(Exception):other.check()
             finally:server.shutdown();server.server_close();thread.join()
