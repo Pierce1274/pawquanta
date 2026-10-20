@@ -1,12 +1,12 @@
 {
   "release": {
-    "version": "0.5.0",
-    "serial": 50,
+    "version": "0.5.1",
+    "serial": 51,
     "genesis": "00000037ccad3f09210835664fce3f8d4ff283e308d8a6cece13e1b4d4d63580",
     "protocol_change": false
   },
   "packages": {
-    "windows-x64": "mainnet-v0.5.0/Pawquanta-Wallet-Windows-x64.zip",
-    "macos-arm64": "mainnet-v0.5.0/Pawquanta-Wallet-macOS-Apple-Silicon.zip"
+    "windows-x64": "mainnet-v0.5.1/Pawquanta-Wallet-Windows-x64.zip",
+    "macos-arm64": "mainnet-v0.5.1/Pawquanta-Wallet-macOS-Apple-Silicon.zip"
   }
 }
