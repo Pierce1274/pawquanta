@@ -17,9 +17,9 @@ class ResourceTests(unittest.TestCase):
         self.assertEqual(pdcrm.parse_cpu_http(tree)['temperature_c'],63.25)
         tree['Children'][0]['RawValue']=float('nan')
         with self.assertRaises(RuntimeError):pdcrm.parse_cpu_http(tree)
-        tree={'Children':[{'Text':'CPU Package','SensorId':'/intelcpu/0/temperature/0','Value':'140 °F'}]}
+        tree={'Children':[{'Text':'CPU Package','SensorId':'/intelcpu/0/temperature/0','Value':'140 Â°F'}]}
         with self.assertRaises(RuntimeError):pdcrm.parse_cpu_http(tree)
-        tree['Children'][0]['Value']='60.0 °C'
+        tree['Children'][0]['Value']='60.0 Â°C'
         self.assertEqual(pdcrm.parse_cpu_http(tree)['temperature_c'],60)
 
     def test_status_does_not_claim_hashing_without_sensors_or_workers(self):
@@ -67,6 +67,19 @@ class ResourceTests(unittest.TestCase):
                     time.sleep(.05);self.assertEqual(worker.search(bytes(76),2**256-1),0)
                     self.assertFalse(worker.gate.is_set());farm.assert_not_called()
                 finally:worker.close()
+
+    def test_manual_mode_allows_missing_sensor_but_never_overrides_known_heat(self):
+        for hot in (False,True):
+            with tempfile.TemporaryDirectory() as d,patch.object(pdcrm,'cpu_telemetry',side_effect=RuntimeError('missing')):
+                pdcrm.save_settings(d,{'cpu_workers':1,'cpu_duty':.25,'gpu_duty':.5,'manual_cpu':True})
+                with patch.object(threading.Thread,'start'):
+                    worker=pdcrm.DynamicSearch(Path(d)/'STOP')
+                worker.cpu_hot=hot
+                thread=threading.Thread(target=worker._monitor);worker.monitor=thread;thread.start()
+                try:
+                    time.sleep(.15)
+                    self.assertEqual(worker.gate.is_set(),not hot)
+                finally:worker.close();thread.join(2)
 
     def test_stop_cleans_up_owned_cpu_processes(self):
         with tempfile.TemporaryDirectory() as d:

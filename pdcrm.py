@@ -1,7 +1,7 @@
 """Pawquanta Dynamic Compute Resource Manager: bounded workers, one submitter.
 
 Temperature limits are conservative policy limits, not inferred hardware ratings.
-Missing CPU telemetry disables CPU hashing. No drivers or elevated code installed.
+Missing CPU telemetry disables CPU hashing unless manual mode is explicitly enabled. No drivers or elevated code installed.
 """
 import hashlib
 import json
@@ -16,21 +16,22 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 
-DEFAULTS={'cpu_workers':0,'cpu_duty':.5,'gpu_duty':.3}
+DEFAULTS={'cpu_workers':0,'cpu_duty':.5,'gpu_duty':.3,'manual_cpu':False}
 
 def status_text(value):
     cpu=value.get('cpu',{});phase=cpu.get('phase');requested=value.get('cpu_workers_requested',0)
     allocated=value.get('cpu_workers_allocated',0)
     if not requested:cpu_text='CPU off'
-    elif phase=='sensor_unavailable':cpu_text='CPU NOT HASHING: temperature readings missing — open CPU temperature setup'
+    elif phase=='sensor_unavailable':cpu_text='CPU NOT HASHING: temperature readings missing â€” open CPU temperature setup'
     elif phase in ('pause','stop'):cpu_text='CPU paused for cooling'
     elif not allocated:cpu_text='CPU waiting for resources or worker startup'
-    elif not value.get('cpu_hashes',0):cpu_text='CPU starting — no hashes completed yet'
-    else:cpu_text=f"CPU hashing: {allocated} workers · {value.get('cpu_hps',0):,.0f} H/s estimated · {value['cpu_hashes']:,} hashes"
+    elif not value.get('cpu_hashes',0):cpu_text='CPU starting â€” no hashes completed yet'
+    else:cpu_text=f"CPU hashing: {allocated} workers Â· {value.get('cpu_hps',0):,.0f} H/s estimated Â· {value['cpu_hashes']:,} hashes"
     if not value.get('gpu_enabled'):gpu_text='GPU off'
     elif value.get('gpu_phase')=='pause':gpu_text='GPU paused for cooling'
     elif not value.get('gpu_hashes',0):gpu_text='GPU starting'
-    else:gpu_text=f"GPU hashing · {value.get('gpu_hps',0)/1000000:.2f} MH/s estimated"
+    else:gpu_text=f"GPU hashing Â· {value.get('gpu_hps',0)/1000000:.2f} MH/s estimated"
+    if phase=='manual':cpu_text+=' · MANUAL: CPU temperature protection unavailable'
     return cpu_text+'\n'+gpu_text
 
 def memory_worker_limit(existing=0):
@@ -63,6 +64,7 @@ def settings(profile):
             legacy=json.loads((Path(profile)/'gpu-performance.json').read_text())['duty_cycle']
             if type(legacy) in (int,float) and .05<=legacy<=.5:value['gpu_duty']=legacy
         except (OSError,ValueError,TypeError,KeyError):pass
+    if type(value['manual_cpu']) is not bool:raise ValueError('Invalid manual mode')
     cores=value['cpu_workers']
     if type(cores) is not int or not 0<=cores<=min(64,os.cpu_count() or 1):raise ValueError('Invalid CPU worker count')
     for name in ('cpu_duty','gpu_duty'):
@@ -73,6 +75,7 @@ def save_settings(profile,value):
     folder=Path(profile);folder.mkdir(parents=True,exist_ok=True)
     temporary=folder/'pdcrm.new.json';temporary.write_text(json.dumps(value,indent=2))
     # Validate before replacing previously usable settings.
+    if type(value.get('manual_cpu',False)) is not bool:raise ValueError('Invalid manual mode')
     cores=value.get('cpu_workers')
     if type(cores) is not int or not 0<=cores<=min(64,os.cpu_count() or 1):raise ValueError('Invalid CPU worker count')
     for key in ('cpu_duty','gpu_duty'):
@@ -126,7 +129,7 @@ def parse_cpu_http(tree):
         if raw is None:
             # Older monitor builds have formatted values only. Never mistake
             # Fahrenheit, a fan speed, or thermal headroom for Celsius.
-            match=re.fullmatch(r'\s*(-?\d+(?:[.,]\d+)?)\s*°C\s*',str(node.get('Value','')))
+            match=re.fullmatch(r'\s*(-?\d+(?:[.,]\d+)?)\s*Â°C\s*',str(node.get('Value','')))
             if match:raw=float(match.group(1).replace(',','.'))
         if raw is not None:
             if type(raw) not in (int,float):raise ValueError('Invalid raw temperature')
@@ -236,7 +239,12 @@ class DynamicSearch:
                     if paused or self.gpu and self.gpu.paused:self.gate.clear()
                     else:self.gate.set()
             except Exception as error:
-                self.gate.clear();self.cpu_state={'phase':'sensor_unavailable','message':'CPU hashing paused: verified CPU temperature unavailable. '+str(error)[:200]}
+                manual=settings(self.profile)['manual_cpu'] and not self.cpu_hot and not (self.gpu and self.gpu.paused)
+                if manual:
+                    self.checked=time.monotonic();self.gate.set()
+                    self.cpu_state={'phase':'manual','message':'Manual CPU mode: temperature protection unavailable','checked_at':time.time()}
+                else:
+                    self.gate.clear();self.cpu_state={'phase':'sensor_unavailable','message':'CPU hashing paused: verified CPU temperature unavailable. '+str(error)[:200]}
             self.shutdown.wait(.5)
 
     def _cpu_round(self,prefix,target,value):
